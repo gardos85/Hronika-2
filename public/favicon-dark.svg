@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- Edge-to-edge Outer Teal-Green Rounded Squircle Border -->
+  <rect x="0" y="0" width="512" height="512" rx="128" ry="128" fill="#3e927c" />
+
+  <!-- Inner Bright White Squircle Area -->
+  <rect x="30" y="30" width="452" height="452" rx="100" ry="100" fill="#ffffff" />
+
+  <!-- Stylized Geometric "H" Monogram in Teal-Green scaled edge-to-edge -->
+  <!-- Left vertical bar: starts at Y=146, seamlessly reaches bottom green border -->
+  <rect x="146" y="146" width="52" height="340" fill="#3e927c" />
+
+  <!-- Right vertical bar: seamlessly starts from top green border, reaches Y=366 -->
+  <rect x="314" y="24" width="52" height="342" fill="#3e927c" />
+
+  <!-- Center connecting crossbar in Teal-Green -->
+  <rect x="146" y="230" width="220" height="52" fill="#3e927c" />
+</svg>

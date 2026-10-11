@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <filter id="dark-logo-drop-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.4" />
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000000" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <g filter="url(#dark-logo-drop-shadow)">
+    <!-- Outer Teal-Green Squircle Border -->
+    <rect x="32" y="32" width="448" height="448" rx="116" ry="116" fill="#3e927c" />
+
+    <!-- Inner White Squircle Area -->
+    <rect x="58" y="58" width="396" height="396" rx="90" ry="90" fill="#ffffff" />
+
+    <!-- Stylized Geometric "H" Monogram in Teal-Green seamlessly connecting to border -->
+    <!-- Left vertical bar: starts at Y=160, seamlessly connects down to bottom green border -->
+    <rect x="160" y="160" width="45" height="300" fill="#3e927c" />
+
+    <!-- Right vertical bar: starts from top green border at Y=52, ends at Y=352 -->
+    <rect x="307" y="52" width="45" height="300" fill="#3e927c" />
+
+    <!-- Center connecting crossbar in Teal-Green -->
+    <rect x="160" y="234" width="192" height="45" fill="#3e927c" />
+  </g>
+</svg>

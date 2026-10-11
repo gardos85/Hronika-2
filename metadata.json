@@ -1,0 +1,5 @@
+{
+  "name": "Hronika",
+  "description": "Interaktivna vremenska linija svetske istorije",
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
