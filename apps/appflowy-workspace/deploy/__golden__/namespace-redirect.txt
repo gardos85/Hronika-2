@@ -1,3 +1,0 @@
-status: 302
-location: /space/home%20page
-

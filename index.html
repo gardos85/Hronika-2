@@ -1,19 +1,161 @@
 <!doctype html>
-<html lang="en">
-  <head>
+<html lang="en" translate="no">
+<head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="shortcut icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>Hronika</title>
-    <meta name="description" content="Interaktivna vremenska linija svetske istorije" />
-    <meta property="og:title" content="Hronika" />
-    <meta property="og:description" content="Interaktivna vremenska linija svetske istorije" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+    <meta name="google" content="notranslate" />
+    <link
+            rel="icon"
+            type="image/svg+xml"
+            href="/appflowy.ico"
+    />
+    <link
+            rel="canonical"
+            href="https://appflowy.com"
+    />
+    <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0"
+    >
+    <script id="appflowy-theme-init">
+      // Apply the theme before the first paint. The app sets it only once its
+      // code has loaded (useAppThemeMode), so until then a server-rendered
+      // page would show in the light theme and flip to dark. Mirrors
+      // useAppThemeMode; src/components/main/__tests__/themeInitScript.test.ts
+      // keeps the two in step.
+      (function () {
+        try {
+          var search = window.location.search;
+          var fixed = search.indexOf('theme') > -1 ? new URLSearchParams(search).get('theme') : null;
+          var dark;
 
+          if (fixed === 'dark') {
+            dark = true;
+          } else if (fixed === 'light') {
+            dark = false;
+          } else {
+            var stored = window.localStorage.getItem('dark-mode');
+
+            dark = stored === null && !fixed
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches
+              : stored === 'true';
+          }
+
+          document.documentElement.setAttribute('data-dark-mode', dark ? 'true' : 'false');
+        } catch (e) {
+          // Storage or media queries unavailable: the app applies the theme on mount.
+        }
+      })();
+
+      // Local offline session bootstrap for Hronika Plus
+      (function() {
+        try {
+          if (!window.localStorage.getItem('token')) {
+            window.localStorage.setItem('token', JSON.stringify({
+              access_token: 'hronika-offline-token',
+              refresh_token: 'hronika-offline-refresh',
+              expires_at: 253402300799,
+              user: {
+                id: 'hronika-local-user',
+                email: 'korisnik@hronika.plus'
+              }
+            }));
+          }
+        } catch (_) {}
+      })();
+    </script>
+    <title>Svici • Hronika Plus</title>
+    <meta
+            name="description"
+            content="Svici — Radni prostor, baze podataka, rukopisi i dokumenti u okviru Hronike Plus"
+    />
+    <meta
+            property="og:title"
+            content="Svici • Hronika Plus"
+    />
+    <meta
+            property="og:site_name"
+            content="Hronika Plus"
+    >
+    <meta
+            property="og:description"
+            content="Svici — Radni prostor, baze podataka, rukopisi i dokumenti u okviru Hronike Plus"
+    />
+    <meta
+            property="og:image"
+            content="/og-image.png"
+    />
+    <meta
+            property="og:url"
+            content="https://appflowy.com"
+    />
+    <meta
+            name="twitter:card"
+            content="summary_large_image"
+    />
+    <meta
+            name="twitter:title"
+            content="AppFlowy"
+    />
+    <meta
+            name="twitter:description"
+            content="AppFlowy is an AI collaborative workspace where you achieve more without losing control of your data"
+    />
+    <meta
+            name="twitter:image"
+            content="/og-image.png"
+    />
+    <meta
+            name="twitter:site"
+            content="@appflowy"
+    />
+    <meta
+            name="twitter:creator"
+            content="@appflowy"
+    />
+    <link
+            href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap"
+            rel="stylesheet"
+    >
+</head>
+<body id="body">
+<div id="root"></div>
+<script
+        type="module"
+        src="/src/main.tsx"
+></script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const body = document.body;
+    const isWin = userAgent.indexOf('win') > -1;
+    const isMac = userAgent.indexOf('mac') > -1;
+    const isLinux = userAgent.indexOf('linux') > -1;
+    const isFirefox = userAgent.indexOf('firefox') > -1;
+    const isChrome = userAgent.indexOf('chrome') > -1;
+    const isSafari = userAgent.indexOf('safari') > -1;
+    if (isWin) {
+      body.setAttribute('data-os', 'windows');
+    } else if (isMac) {
+      body.setAttribute('data-os', 'mac');
+    } else if (isLinux) {
+      body.setAttribute('data-os', 'linux');
+    } else {
+      body.setAttribute('data-os', 'unknown');
+    }
+
+    if (isFirefox) {
+      body.setAttribute('data-browser', 'firefox');
+    } else if (isChrome) {
+      body.setAttribute('data-browser', 'chrome');
+    } else if (isSafari) {
+      body.setAttribute('data-browser', 'safari');
+    } else {
+      body.setAttribute('data-browser', 'unknown');
+    }
+  });
+</script>
+
+
+</body>
+</html>

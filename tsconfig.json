@@ -1,36 +1,66 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "experimentalDecorators": true,
-    "useDefineForClassFields": false,
-    "module": "ESNext",
+    "target": "ESNext",
+    "useDefineForClassFields": true,
     "lib": [
-      "ES2022",
       "DOM",
-      "DOM.Iterable"
+      "DOM.Iterable",
+      "ESNext"
     ],
+    "allowJs": false,
     "skipLibCheck": true,
-    "moduleResolution": "bundler",
+    "esModuleInterop": false,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
     "isolatedModules": true,
-    "moduleDetection": "force",
-    "allowJs": true,
+    "preserveValueImports": false,
+    "noEmit": true,
     "jsx": "react-jsx",
+    "types": [
+      "node",
+      "jest"
+    ],
+    "typeRoots": [
+      "./node_modules/@fullcalendar"
+    ],
+    "baseUrl": ".",
     "paths": {
       "@/*": [
-        "./*"
+        "src/*"
+      ],
+      "src/*": [
+        "src/*"
+      ],
+      "$client-services": [
+        "src/application/services/js-services"
+      ],
+      "$icons/*": [
+        "../resources/flowy-flowy_icons/*"
       ]
-    },
-    "allowImportingTsExtensions": true,
-    "noEmit": true
+    }
   },
   "include": [
     "src",
-    "server.ts",
-    "vite.config.ts"
+    "api",
+    ".storybook",
+    "vite.config.ts",
+    "deploy/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "apps"
+    "coverage",
+    "src/proto/**/*"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    }
   ]
 }
