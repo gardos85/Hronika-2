@@ -1,0 +1,1682 @@
+import BaseDexie from 'dexie';
+import { IndexeddbPersistence } from 'y-indexeddb';
+import * as Y from 'yjs';
+
+import { databasePrefix } from '@/application/constants';
+import { appViewCacheSchema, type AppViewCacheTable } from '@/application/db/tables/app_view_cache';
+import {
+  collabStorageSchema,
+  type CollabSnapshotRecord,
+  type CollabStorageTable,
+  type CollabUpdateRecord,
+} from '@/application/db/tables/collab_storage';
+import { rowSchema, rowTable } from '@/application/db/tables/rows';
+import { syncOutboxSchema, SyncOutboxTable } from '@/application/db/tables/sync_outbox';
+import { userSchema, UserTable } from '@/application/db/tables/users';
+import { versionSchema, VersionsTable } from '@/application/db/tables/versions';
+import { viewMetasSchema, ViewMetasTable } from '@/application/db/tables/view_metas';
+import {
+  workspaceDatabaseCatalogSchema,
+  WorkspaceDatabaseCatalogTable,
+} from '@/application/db/tables/workspace_database_catalog';
+import {
+  workspaceMemberProfileSchema,
+  WorkspaceMemberProfileTable,
+} from '@/application/db/tables/workspace_member_profiles';
+import { YDoc, YjsDatabaseKey, YjsEditorKey } from '@/application/types';
+import { Log } from '@/utils/log';
+
+import {
+  DATABASE_CACHE_EPOCH_PREFIX,
+  DATABASE_RESTORE_MARKER_PREFIX,
+  DatabaseStorageGenerationChangedError,
+  type DatabaseStorageFence,
+  databaseStorageFenceObjectId,
+  getApplyingDatabaseStorageFence,
+  isDatabaseStorageFenceCurrent,
+  publishDatabaseCacheEpoch,
+  readDatabaseCacheEpoch,
+} from './database-storage-fence';
+
+type DexieTables = ViewMetasTable &
+  UserTable &
+  rowTable &
+  WorkspaceMemberProfileTable &
+  VersionsTable &
+  SyncOutboxTable &
+  CollabStorageTable &
+  AppViewCacheTable &
+  WorkspaceDatabaseCatalogTable;
+
+export type Dexie<T = DexieTables> = BaseDexie & T;
+
+export const db = new BaseDexie(`${databasePrefix}_cache`) as Dexie;
+const _schema = Object.assign(
+  {},
+  {
+    ...viewMetasSchema,
+    ...userSchema,
+    ...rowSchema,
+    ...versionSchema,
+    ...syncOutboxSchema,
+    ...collabStorageSchema,
+    ...appViewCacheSchema,
+    ...workspaceDatabaseCatalogSchema,
+  }
+);
+
+const legacyAppViewCacheSchema = {
+  app_view_cache: '[workspace_id+view_id], workspace_id, view_id, updated_at',
+};
+
+const legacyUserIndexedAppViewCacheSchema = {
+  app_view_cache: '[workspace_id+view_id], user_id, [user_id+workspace_id+view_id], workspace_id, view_id, updated_at',
+};
+
+const dropAppViewCacheSchema = {
+  app_view_cache: null,
+};
+
+// Version 1: Initial schema with view_metas, users, and rows
+db.version(1).stores({
+  ...viewMetasSchema,
+  ...userSchema,
+  ...rowSchema,
+});
+
+// Version 2: Add workspace_member_profiles table
+db.version(2)
+  .stores({
+    ...viewMetasSchema,
+    ...userSchema,
+    ...rowSchema,
+    ...workspaceMemberProfileSchema,
+  })
+  .upgrade(async (transaction) => {
+    try {
+      // Touch the new store so Dexie creates it for users upgrading from version 1.
+      await transaction.table('workspace_member_profiles').count();
+    } catch (error) {
+      console.error('Failed to initialize workspace_member_profiles store during upgrade:', error);
+      throw error;
+    }
+  });
+
+// Version 3: Add collab_versions table
+db.version(3)
+  .stores({
+    ...viewMetasSchema,
+    ...userSchema,
+    ...rowSchema,
+    ...workspaceMemberProfileSchema,
+    ...versionSchema,
+  })
+  .upgrade(async (transaction) => {
+    try {
+      // Touch the new store so Dexie creates it for users upgrading from version 2.
+      await transaction.table('collab_versions').count();
+    } catch (error) {
+      console.error('Failed to initialize collab_versions store during upgrade:', error);
+      throw error;
+    }
+  });
+
+// Version 4: Initial sync_outbox table (superseded by v5 — kept for upgrade path)
+db.version(4).stores({
+  ...viewMetasSchema,
+  ...userSchema,
+  ...rowSchema,
+  ...workspaceMemberProfileSchema,
+  ...versionSchema,
+  sync_outbox: '++id, objectId, [objectId+id]',
+});
+
+// Version 5: Add workspaceId scoping to sync_outbox so records enqueued in
+// one workspace cannot be drained against another workspace's WebSocket.
+// Records from v4 (without workspaceId) are discarded on upgrade — they would
+// otherwise be orphaned since we cannot infer their originating workspace.
+db.version(5)
+  .stores({
+    ...viewMetasSchema,
+    ...userSchema,
+    ...rowSchema,
+    ...workspaceMemberProfileSchema,
+    ...versionSchema,
+    sync_outbox: '++id, workspaceId, objectId, [workspaceId+objectId], [workspaceId+objectId+id]',
+  })
+  .upgrade(async (transaction) => {
+    try {
+      await transaction.table('sync_outbox').clear();
+    } catch (error) {
+      console.error('Failed to clear sync_outbox on v5 upgrade:', error);
+      throw error;
+    }
+  });
+
+// Version 6: Add userId scoping to sync_outbox. Without userId, a tab crash
+// with pending rows for user A could drain those rows over user B's
+// WebSocket after re-authentication on the same browser. Drop any v5 records
+// on upgrade — their originating userId is unknowable.
+db.version(6)
+  .stores({
+    ...viewMetasSchema,
+    ...userSchema,
+    ...rowSchema,
+    ...workspaceMemberProfileSchema,
+    ...versionSchema,
+    ...syncOutboxSchema,
+  })
+  .upgrade(async (transaction) => {
+    try {
+      await transaction.table('sync_outbox').clear();
+    } catch (error) {
+      console.error('Failed to clear sync_outbox on v6 upgrade:', error);
+      throw error;
+    }
+  });
+
+// Version 7: Shared collab storage for high-cardinality objects such as
+// database rows. This avoids creating one browser IndexedDB database per row.
+db.version(7).stores({
+  ...viewMetasSchema,
+  ...userSchema,
+  ...rowSchema,
+  ...workspaceMemberProfileSchema,
+  ...versionSchema,
+  ...syncOutboxSchema,
+  ...collabStorageSchema,
+});
+
+// Version 8: durable app view payload cache used by the sidebar to render
+// expanded children immediately while refreshing from the server.
+db.version(8).stores({
+  ...viewMetasSchema,
+  ...userSchema,
+  ...rowSchema,
+  ...workspaceMemberProfileSchema,
+  ...versionSchema,
+  ...syncOutboxSchema,
+  ...collabStorageSchema,
+  ...legacyAppViewCacheSchema,
+});
+
+// Version 9: add a user-scoped lookup index to app_view_cache. Existing v8 rows
+// cannot be safely attributed, so discard them during migration.
+db.version(9)
+  .stores({
+    ...viewMetasSchema,
+    ...userSchema,
+    ...rowSchema,
+    ...workspaceMemberProfileSchema,
+    ...versionSchema,
+    ...syncOutboxSchema,
+    ...collabStorageSchema,
+    ...legacyUserIndexedAppViewCacheSchema,
+  })
+  .upgrade(async (transaction) => {
+    try {
+      await transaction.table('app_view_cache').clear();
+    } catch (error) {
+      console.error('Failed to clear app_view_cache on v9 upgrade:', error);
+      throw error;
+    }
+  });
+
+// Version 10: drop the legacy app_view_cache store before changing its primary
+// key. Dexie cannot migrate an IndexedDB object store key path in place.
+db.version(10).stores({
+  ...viewMetasSchema,
+  ...userSchema,
+  ...rowSchema,
+  ...workspaceMemberProfileSchema,
+  ...versionSchema,
+  ...syncOutboxSchema,
+  ...collabStorageSchema,
+  ...dropAppViewCacheSchema,
+});
+
+// Version 11: recreate app_view_cache with user_id in the primary key so two
+// users can persist separate cache rows for the same workspace/view.
+db.version(11).stores({
+  ...viewMetasSchema,
+  ...userSchema,
+  ...rowSchema,
+  ...workspaceMemberProfileSchema,
+  ...versionSchema,
+  ...syncOutboxSchema,
+  ...collabStorageSchema,
+  ...appViewCacheSchema,
+});
+
+// Version 12: persist the workspace database catalog by view ID. Database
+// identity lookups can now resolve from IndexedDB before fetching the server
+// catalog, without reopening the legacy workspace-database collaboration doc.
+db.version(12).stores({
+  ...viewMetasSchema,
+  ...userSchema,
+  ...rowSchema,
+  ...workspaceMemberProfileSchema,
+  ...versionSchema,
+  ...syncOutboxSchema,
+  ...collabStorageSchema,
+  ...appViewCacheSchema,
+  ...workspaceDatabaseCatalogSchema,
+});
+
+const openedSet = new Set<string>();
+const ensuredStores = new Map<string, Promise<void>>();
+
+const yjsStoreDefinitions = [{ name: 'updates', options: { autoIncrement: true } }, { name: 'custom' }];
+
+type IndexedDBFactoryWithDatabases = IDBFactory & {
+  databases?: () => Promise<Array<{ name?: string | null }>>;
+};
+
+function createYjsStores(db: IDBDatabase) {
+  yjsStoreDefinitions.forEach((store) => {
+    if (!db.objectStoreNames.contains(store.name)) {
+      db.createObjectStore(store.name, store.options);
+    }
+  });
+}
+
+function openIdbDatabase(name: string, version?: number) {
+  return new Promise<IDBDatabase | null>((resolve) => {
+    const request = typeof version === 'number' ? indexedDB.open(name, version) : indexedDB.open(name);
+
+    request.onupgradeneeded = () => {
+      createYjsStores(request.result);
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => resolve(null);
+    request.onblocked = () => resolve(null);
+  });
+}
+
+async function ensureYjsStores(name: string) {
+  if (typeof indexedDB === 'undefined') return;
+
+  const existing = ensuredStores.get(name);
+
+  if (existing) {
+    await existing;
+    return;
+  }
+
+  const ensurePromise = (async () => {
+    const db = await openIdbDatabase(name);
+
+    if (!db) return;
+
+    const missingStores = yjsStoreDefinitions.filter((store) => !db.objectStoreNames.contains(store.name));
+
+    if (missingStores.length === 0) {
+      db.close();
+      return;
+    }
+
+    const nextVersion = db.version + 1;
+
+    db.close();
+    const upgraded = await openIdbDatabase(name, nextVersion);
+
+    upgraded?.close();
+  })().catch((error) => {
+    Log.warn('[Database] failed to ensure yjs stores', { name, error });
+  });
+
+  ensuredStores.set(name, ensurePromise);
+  await ensurePromise;
+  ensuredStores.delete(name);
+}
+
+export async function listCollabIndexedDBNames() {
+  if (typeof indexedDB === 'undefined') return new Set<string>();
+
+  const indexedDBWithDatabases = indexedDB as IndexedDBFactoryWithDatabases;
+
+  if (typeof indexedDBWithDatabases.databases !== 'function') {
+    return new Set<string>();
+  }
+
+  try {
+    const databases = await indexedDBWithDatabases.databases();
+
+    return new Set(databases.flatMap((database) => (database.name ? [database.name] : [])));
+  } catch (error) {
+    Log.warn('[DB] failed to list IndexedDB databases', { error });
+    return new Set<string>();
+  }
+}
+
+async function probeCollabIndexedDBExists(name: string) {
+  if (typeof indexedDB === 'undefined') return false;
+
+  return new Promise<boolean>((resolve) => {
+    let createdDuringProbe = false;
+    let settled = false;
+    const resolveOnce = (exists: boolean) => {
+      if (settled) return;
+
+      settled = true;
+      resolve(exists);
+    };
+
+    try {
+      const request = indexedDB.open(name);
+
+      request.onupgradeneeded = () => {
+        createdDuringProbe = true;
+      };
+
+      request.onsuccess = async () => {
+        const database = request.result;
+
+        database.close();
+
+        if (createdDuringProbe) {
+          const deleted = await deleteIndexedDBDatabase(name);
+
+          if (!deleted) {
+            Log.warn('[DB] failed to delete empty IndexedDB database created while probing existence', { name });
+          }
+
+          resolveOnce(false);
+          return;
+        }
+
+        resolveOnce(true);
+      };
+
+      request.onerror = () => {
+        Log.warn('[DB] failed to probe collab IndexedDB database', { name, error: request.error });
+        resolveOnce(false);
+      };
+
+      request.onblocked = () => {
+        Log.warn('[DB] collab IndexedDB existence probe blocked', { name });
+        resolveOnce(false);
+      };
+    } catch (error) {
+      Log.warn('[DB] failed to probe collab IndexedDB database', { name, error });
+      resolveOnce(false);
+    }
+  });
+}
+
+export async function collabIndexedDBExists(name: string) {
+  if (!name) return false;
+
+  if (typeof indexedDB === 'undefined') return false;
+
+  const indexedDBWithDatabases = indexedDB as IndexedDBFactoryWithDatabases;
+
+  if (typeof indexedDBWithDatabases.databases === 'function') {
+    try {
+      const databases = await indexedDBWithDatabases.databases();
+
+      return databases.some((database) => database.name === name);
+    } catch (error) {
+      Log.warn('[DB] failed to list IndexedDB databases while checking collab existence', { name, error });
+    }
+  }
+
+  return probeCollabIndexedDBExists(name);
+}
+
+export interface OpenCollabOptions {
+  /** Database roots use an isolated durable namespace after each committed restore. */
+  databaseRestoreId?: string;
+  /**
+   * Define what version collab should have when loaded from IndexedDB.
+   * If the persisted version is different, it will be removed as outdated.
+   */
+  expectedVersion?: string;
+  /**
+   * Force clearing persisted Yjs updates before reopening.
+   * Useful when the local cache must be discarded even without an expectedVersion,
+   * for example when local/remote version-known state mismatches.
+   */
+  forceReset?: boolean;
+  /**
+   * Define current user UID. If provided that value will be written into
+   * the document data itself and used in the future for associating Yjs document
+   * changes with specific users.
+   */
+  currentUser?: string;
+}
+
+/**
+ * Unified provider cache for Y.Doc + IndexeddbPersistence instances.
+ * All paths that create Y.Docs funnel through openCollabDBWithProvider,
+ * which uses this cache to ensure the same Y.Doc is shared across consumers.
+ */
+interface CachedProviderEntry {
+  databaseRestoreId?: string;
+  doc: YDoc;
+  provider: CollabPersistenceProvider;
+  whenSynced: Promise<void>;
+  disposed: boolean;
+  settleWhenDisposed: () => void;
+}
+
+const providerCache = new Map<string, CachedProviderEntry>();
+const pendingOpens = new Map<string, Promise<CachedProviderEntry>>();
+const rowProviderCache = new Map<string, CachedProviderEntry>();
+const pendingRowOpens = new Map<string, Promise<CachedProviderEntry>>();
+const DATABASE_BLOB_RID_PREFIX = 'af_database_blob_rid:';
+const SHARED_COLLAB_COMPACT_UPDATE_THRESHOLD = 200;
+const SHARED_STORAGE_EPOCH_KEY = '__storage_epoch';
+const SHARED_COLLAB_COMPACT_MAX_RETRIES = 3;
+const DELETE_INDEXEDDB_BLOCKED_TIMEOUT_MS = 2000;
+
+type CollabPersistenceProvider = IndexeddbPersistence | SharedIndexeddbPersistence;
+type SharedCollabOpenOptions = {
+  awaitSync?: boolean;
+  expectedVersion?: string;
+  forceReset?: boolean;
+  skipCache?: boolean;
+};
+
+class SharedCollabCompactionRetry extends Error {
+  constructor() {
+    super('Shared collab snapshot changed during compaction');
+    this.name = 'SharedCollabCompactionRetry';
+  }
+}
+
+function shouldRetrySharedCollabCompaction(error: unknown) {
+  return error instanceof SharedCollabCompactionRetry || (error as Error)?.name === 'SharedCollabCompactionRetry';
+}
+
+function getSharedCollabSnapshotToken(snapshot: CollabSnapshotRecord | undefined) {
+  return `${snapshot?.compactionId ?? ''}:${snapshot?.updatedAt ?? 0}:${snapshot?.byteLength ?? 0}:${
+    snapshot?.stateVector.byteLength ?? 0
+  }`;
+}
+
+function createSharedCollabSnapshotId() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/** Capture the aggregate epoch before requesting any row bytes from the server. */
+export async function captureDatabaseStorageFence(
+  databaseId: string,
+  options: { required?: boolean } = {}
+): Promise<DatabaseStorageFence> {
+  try {
+    return await db.transaction('r', db.collab_custom, async () => {
+      const record = await db.collab_custom.get([databaseStorageFenceObjectId(databaseId), SHARED_STORAGE_EPOCH_KEY]);
+      const epoch = typeof record?.value === 'string' ? record.value : null;
+      const cacheEpoch = readDatabaseCacheEpoch(databaseId);
+
+      if (options.required && cacheEpoch === undefined) throw new Error('Database cache fencing is unavailable');
+      return {
+        databaseId,
+        epoch,
+        cacheEpoch,
+        ...(epoch === null && cacheEpoch === undefined ? { nonDurable: true } : {}),
+      };
+    });
+  } catch (error) {
+    const cacheEpoch = readDatabaseCacheEpoch(databaseId);
+
+    if (options.required || typeof cacheEpoch === 'string') throw error;
+    // Published/ordinary reads already support unavailable IndexedDB. Their
+    // seed carries the unmarked generation, so any eventual durable write
+    // still rejects it if storage recovers after a restore in another tab.
+    return { databaseId, epoch: null, cacheEpoch, nonDurable: true };
+  }
+}
+
+/** Called before replacing a restored database's root or any of its rows. */
+export async function rotateDatabaseStorageFence(
+  databaseId: string,
+  databaseRestoreId: string,
+  expectedEpoch: string | null
+): Promise<void> {
+  await db.transaction('rw', db.collab_custom, async () => {
+    const objectId = databaseStorageFenceObjectId(databaseId);
+    const current = await db.collab_custom.get([objectId, SHARED_STORAGE_EPOCH_KEY]);
+    const epoch = typeof current?.value === 'string' ? current.value : null;
+
+    if (epoch !== databaseRestoreId && epoch !== expectedEpoch) throw new DatabaseStorageGenerationChangedError();
+
+    // Two tabs reconciling the same committed restore share one generation.
+    // Retrying must not retire a provider already hydrated by the other tab.
+    if (current?.value !== databaseRestoreId) {
+      await db.collab_custom.put({ objectId, key: SHARED_STORAGE_EPOCH_KEY, value: databaseRestoreId });
+    }
+
+    // Seed reads are synchronous. Publishing under the same transaction lock
+    // makes their cross-tab shadow change before replacement storage is visible.
+    publishDatabaseCacheEpoch(databaseId, databaseRestoreId);
+  });
+}
+
+/** The caller must hold a transaction that includes collab_custom while mutating storage. */
+export async function matchesDatabaseStorageFence(fence: DatabaseStorageFence): Promise<boolean> {
+  const record = await db.collab_custom.get([databaseStorageFenceObjectId(fence.databaseId), SHARED_STORAGE_EPOCH_KEY]);
+
+  return (typeof record?.value === 'string' ? record.value : null) === fence.epoch;
+}
+
+/** Publish a synchronous cache checkpoint only while its durable generation is current. */
+export async function publishWithDatabaseStorageFence(
+  fence: DatabaseStorageFence,
+  publish: () => void
+): Promise<boolean> {
+  try {
+    return await db.transaction('rw', db.collab_custom, async () => {
+      if (!isDatabaseStorageFenceCurrent(fence) || !(await matchesDatabaseStorageFence(fence))) return false;
+      publish();
+      return true;
+    });
+  } catch (error) {
+    if (!fence.nonDurable || !isDatabaseStorageFenceCurrent(fence)) throw error;
+    publish();
+    return true;
+  }
+}
+
+async function readSharedCollabRecordsForSync(name: string): Promise<{
+  snapshot: CollabSnapshotRecord | undefined;
+  updates: CollabUpdateRecord[];
+  storageEpoch: string | null;
+}> {
+  return db.transaction('r', db.collab_snapshots, db.collab_updates, db.collab_custom, async () => {
+    const epoch = await db.collab_custom.get([name, SHARED_STORAGE_EPOCH_KEY]);
+    const snapshot = await db.collab_snapshots.get(name);
+    const updates = await db.collab_updates
+      .where('[objectId+id]')
+      .between([name, BaseDexie.minKey], [name, BaseDexie.maxKey])
+      .toArray();
+
+    return { snapshot, updates, storageEpoch: typeof epoch?.value === 'string' ? epoch.value : null };
+  });
+}
+
+/** Resolve rows owned by another tab without opening a provider or binding sync. */
+export async function readDatabaseIdFromRowCache(rowId: string): Promise<string | undefined> {
+  const { snapshot, updates } = await readSharedCollabRecordsForSync(rowId);
+  const doc = new Y.Doc();
+
+  try {
+    if (snapshot?.update) Y.applyUpdate(doc, snapshot.update);
+    for (const record of updates) Y.applyUpdate(doc, record.update);
+    const row = doc.getMap(YjsEditorKey.data_section).get(YjsEditorKey.database_row);
+    const databaseId = row instanceof Y.Map ? row.get(YjsDatabaseKey.database_id) : undefined;
+
+    return typeof databaseId === 'string' && databaseId.length > 0 ? databaseId : undefined;
+  } finally {
+    doc.destroy();
+  }
+}
+
+class CollabProviderDisposedError extends Error {
+  constructor(name: string) {
+    super(`Collab provider was disposed while opening: ${name}`);
+    this.name = 'CollabProviderDisposedError';
+  }
+}
+
+function createCachedProviderEntry(
+  name: string,
+  startedAt: number,
+  doc: YDoc,
+  provider: CollabPersistenceProvider
+): CachedProviderEntry {
+  let settled = false;
+  let resolveWhenSynced!: () => void;
+
+  const entry: CachedProviderEntry = {
+    doc,
+    provider,
+    disposed: false,
+    whenSynced: new Promise<void>((resolve) => {
+      resolveWhenSynced = resolve;
+    }),
+    settleWhenDisposed: () => {
+      entry.disposed = true;
+
+      if (settled) return;
+
+      settled = true;
+      (provider as { off?: (event: string, listener: (...args: unknown[]) => void) => void }).off?.(
+        'synced',
+        handleSync
+      );
+      resolveWhenSynced();
+    },
+  };
+
+  const handleSync = () => {
+    if (settled) return;
+
+    settled = true;
+    (provider as { off?: (event: string, listener: (...args: unknown[]) => void) => void }).off?.('synced', handleSync);
+
+    Log.debug('[DB] collab provider synced', {
+      name,
+      syncDurationMs: Date.now() - startedAt,
+      wasOpened: openedSet.has(name),
+    });
+
+    if (!openedSet.has(name)) {
+      openedSet.add(name);
+    }
+
+    resolveWhenSynced();
+  };
+
+  provider.on('synced', handleSync);
+
+  if ((provider as { synced?: boolean }).synced) {
+    handleSync();
+  }
+
+  return entry;
+}
+
+async function waitForProviderEntry(name: string, entry: CachedProviderEntry) {
+  await entry.whenSynced;
+
+  if (entry.disposed) {
+    throw new CollabProviderDisposedError(name);
+  }
+}
+
+class SharedIndexeddbPersistence {
+  doc: YDoc;
+  name: string;
+  synced = false;
+  whenSynced: Promise<SharedIndexeddbPersistence>;
+
+  private _destroyed = false;
+  private _listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+  private _pendingWrite: Promise<void> = Promise.resolve();
+  // Keep the queue usable for later edits without losing an earlier failure.
+  private _persistenceError?: { error: unknown };
+  private _updatesSinceCompact = 0;
+  private _storageEpoch: string | null = null;
+  private _storageRetired = false;
+  private _databaseStorageFence?: DatabaseStorageFence;
+
+  constructor(name: string, doc: YDoc) {
+    this.name = name;
+    this.doc = doc;
+    this.whenSynced = this.sync();
+    this.destroy = this.destroy.bind(this);
+
+    doc.on('update', this._storeUpdate);
+    doc.on('destroy', this.destroy);
+  }
+
+  on(event: string, listener: (...args: unknown[]) => void) {
+    const listeners = this._listeners.get(event) ?? new Set<(...args: unknown[]) => void>();
+
+    listeners.add(listener);
+    this._listeners.set(event, listeners);
+  }
+
+  off(event: string, listener: (...args: unknown[]) => void) {
+    this._listeners.get(event)?.delete(listener);
+  }
+
+  emit(event: string, args: unknown[] = []) {
+    this._listeners.get(event)?.forEach((listener) => {
+      listener(...args);
+    });
+  }
+
+  private async sync() {
+    try {
+      const { snapshot, updates, storageEpoch } = await readSharedCollabRecordsForSync(this.name);
+
+      this._storageEpoch = storageEpoch;
+
+      if (this._destroyed) return this;
+
+      if (snapshot?.update) {
+        Y.applyUpdate(this.doc, snapshot.update, this);
+      }
+
+      if (updates.length > 0) {
+        Y.transact(
+          this.doc,
+          () => {
+            updates.forEach((record) => {
+              Y.applyUpdate(this.doc, record.update, this);
+            });
+          },
+          this
+        );
+      }
+
+      this._updatesSinceCompact = updates.length;
+    } catch (error) {
+      this._persistenceError ??= { error };
+      Log.warn('[DB] failed to sync shared collab IndexedDB data', { name: this.name, error });
+    } finally {
+      if (!this._destroyed) {
+        this.synced = true;
+        this.emit('synced', [this]);
+
+        if (this._updatesSinceCompact >= SHARED_COLLAB_COMPACT_UPDATE_THRESHOLD) {
+          this.queueCompact();
+        }
+      }
+    }
+
+    return this;
+  }
+
+  private _storeUpdate = (update: Uint8Array, origin: unknown) => {
+    if (this._destroyed || this._storageRetired || origin === this) {
+      return;
+    }
+
+    const persistedUpdate = new Uint8Array(update);
+    const databaseStorageFence = getApplyingDatabaseStorageFence(this.doc);
+
+    if (databaseStorageFence) {
+      // A provider already containing another aggregate must never adopt the
+      // new epoch: its in-memory CRDT would carry the previous branch forward.
+      if (
+        this._databaseStorageFence &&
+        (this._databaseStorageFence.databaseId !== databaseStorageFence.databaseId ||
+          this._databaseStorageFence.epoch !== databaseStorageFence.epoch)
+      )
+        this._storageRetired = true;
+      else this._databaseStorageFence = databaseStorageFence;
+    }
+
+    this._pendingWrite = this._pendingWrite
+      .then(async () => {
+        await this.whenSynced;
+        const persisted = await db.transaction('rw', db.collab_updates, db.collab_custom, async () => {
+          if (!(await this.isCurrentStorageEpoch())) return false;
+          if (databaseStorageFence && !(await matchesDatabaseStorageFence(databaseStorageFence))) return false;
+          await db.collab_updates.add({
+            objectId: this.name,
+            update: persistedUpdate,
+            createdAt: Date.now(),
+            byteLength: persistedUpdate.byteLength,
+          });
+          return true;
+        });
+
+        if (!persisted) throw new DatabaseStorageGenerationChangedError();
+        this._updatesSinceCompact += 1;
+
+        if (this._updatesSinceCompact >= SHARED_COLLAB_COMPACT_UPDATE_THRESHOLD) {
+          await this.compact();
+        }
+      })
+      .catch((error) => {
+        this._persistenceError ??= { error };
+        Log.warn('[DB] failed to persist shared collab update', { name: this.name, error });
+      });
+  };
+
+  /** The epoch check and write share a transaction with authoritative cache deletion. */
+  private async isCurrentStorageEpoch(): Promise<boolean> {
+    if (this._storageRetired) return false;
+    const record = await db.collab_custom.get([this.name, SHARED_STORAGE_EPOCH_KEY]);
+    const current = typeof record?.value === 'string' ? record.value : null;
+
+    if (current !== this._storageEpoch) this._storageRetired = true;
+    if (this._databaseStorageFence && !(await matchesDatabaseStorageFence(this._databaseStorageFence)))
+      this._storageRetired = true;
+    return !this._storageRetired;
+  }
+
+  private queueCompact() {
+    this._pendingWrite = this._pendingWrite
+      .then(() => this.compact())
+      .catch((error) => {
+        this._persistenceError ??= { error };
+        Log.warn('[DB] failed to compact shared collab updates', { name: this.name, error });
+      });
+  }
+
+  private async compact() {
+    if (this._destroyed) return;
+
+    for (let attempt = 0; attempt < SHARED_COLLAB_COMPACT_MAX_RETRIES; attempt += 1) {
+      const baseSnapshot = await db.collab_snapshots.get(this.name);
+      const baseSnapshotToken = getSharedCollabSnapshotToken(baseSnapshot);
+      const compactedRecords = await db.collab_updates
+        .where('[objectId+id]')
+        .between([this.name, BaseDexie.minKey], [this.name, BaseDexie.maxKey])
+        .toArray();
+
+      if (this._destroyed) return;
+
+      if (baseSnapshot?.update) {
+        Y.applyUpdate(this.doc, baseSnapshot.update, this);
+      }
+
+      if (compactedRecords.length > 0) {
+        Y.transact(
+          this.doc,
+          () => {
+            compactedRecords.forEach((record) => {
+              Y.applyUpdate(this.doc, record.update, this);
+            });
+          },
+          this
+        );
+      }
+
+      const update = Y.encodeStateAsUpdate(this.doc);
+      const stateVector = Y.encodeStateVector(this.doc);
+      const compactedIds = compactedRecords.flatMap((record) => (typeof record.id === 'number' ? [record.id] : []));
+      const compactionId = createSharedCollabSnapshotId();
+      let remainingUpdateCount = 0;
+
+      try {
+        await db.transaction('rw', db.collab_snapshots, db.collab_updates, db.collab_custom, async () => {
+          if (!(await this.isCurrentStorageEpoch())) return;
+          const currentSnapshot = await db.collab_snapshots.get(this.name);
+
+          if (getSharedCollabSnapshotToken(currentSnapshot) !== baseSnapshotToken) {
+            throw new SharedCollabCompactionRetry();
+          }
+
+          await db.collab_snapshots.put({
+            objectId: this.name,
+            update,
+            stateVector,
+            version: this.doc.version ?? null,
+            compactionId,
+            updatedAt: Date.now(),
+            byteLength: update.byteLength,
+          });
+
+          if (compactedIds.length > 0) {
+            await db.collab_updates.bulkDelete(compactedIds);
+          }
+
+          remainingUpdateCount = await db.collab_updates.where('objectId').equals(this.name).count();
+        });
+
+        this._updatesSinceCompact = remainingUpdateCount;
+        return;
+      } catch (error) {
+        if (shouldRetrySharedCollabCompaction(error)) {
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    this._updatesSinceCompact = await db.collab_updates.where('objectId').equals(this.name).count();
+  }
+
+  /** Confirm durability without changing best-effort provider cleanup. */
+  async whenPersisted(): Promise<void> {
+    await this.whenSynced;
+    await this._pendingWrite;
+    if (this._persistenceError) throw this._persistenceError.error;
+    if (this._storageRetired) throw new DatabaseStorageGenerationChangedError();
+    if (this._destroyed) throw new CollabProviderDisposedError(this.name);
+  }
+
+  async destroy() {
+    if (this._destroyed) {
+      await this._pendingWrite.catch(() => undefined);
+      return;
+    }
+
+    this.doc.off('update', this._storeUpdate);
+    this.doc.off('destroy', this.destroy);
+    this._destroyed = true;
+    this._listeners.clear();
+    await this._pendingWrite.catch(() => undefined);
+  }
+
+  async clearData() {
+    await this.destroy();
+    await deleteSharedCollabData(this.name);
+  }
+
+  async get(key: IDBValidKey) {
+    return db.collab_custom.get([this.name, String(key)]).then((record) => record?.value);
+  }
+
+  async set(key: IDBValidKey, value: unknown) {
+    await this.whenSynced;
+    await db.transaction('rw', db.collab_custom, async () => {
+      if (!(await this.isCurrentStorageEpoch())) return;
+      await db.collab_custom.put({ objectId: this.name, key: String(key), value });
+    });
+
+    return value;
+  }
+
+  async del(key: IDBValidKey) {
+    await this.whenSynced;
+    await db.transaction('rw', db.collab_custom, async () => {
+      if (!(await this.isCurrentStorageEpoch())) return;
+      await db.collab_custom.delete([this.name, String(key)]);
+    });
+  }
+}
+
+async function destroyProviderEntry(entry: CachedProviderEntry, options: { destroyDoc?: boolean } = {}) {
+  entry.settleWhenDisposed();
+  await entry.provider.destroy();
+
+  if (options.destroyDoc !== false) {
+    entry.doc.destroy();
+  }
+}
+
+async function disposeCachedProvider(name: string, options: { destroyDoc?: boolean } = {}) {
+  let disposed = false;
+  const pending = pendingOpens.get(name);
+
+  if (pending) {
+    pendingOpens.delete(name);
+
+    try {
+      const entry = await pending;
+
+      if (providerCache.get(name) === entry) {
+        providerCache.delete(name);
+      }
+
+      await destroyProviderEntry(entry, options);
+      disposed = true;
+    } catch (error) {
+      Log.warn('[DB] failed to dispose pending collab provider', { name, error });
+    }
+  }
+
+  const cached = providerCache.get(name);
+
+  providerCache.delete(name);
+  pendingOpens.delete(name);
+
+  if (cached) {
+    await destroyProviderEntry(cached, options);
+    disposed = true;
+  }
+
+  return disposed;
+}
+
+async function disposeRowProvider(name: string, options: { destroyDoc?: boolean } = {}) {
+  let disposed = false;
+  const pending = pendingRowOpens.get(name);
+
+  if (pending) {
+    pendingRowOpens.delete(name);
+
+    try {
+      const entry = await pending;
+
+      if (rowProviderCache.get(name) === entry) {
+        rowProviderCache.delete(name);
+      }
+
+      await destroyProviderEntry(entry, options);
+      disposed = true;
+    } catch (error) {
+      Log.warn('[DB] failed to dispose pending shared row provider', { name, error });
+    }
+  }
+
+  const cached = rowProviderCache.get(name);
+
+  rowProviderCache.delete(name);
+  pendingRowOpens.delete(name);
+
+  if (cached) {
+    await destroyProviderEntry(cached, options);
+    disposed = true;
+  }
+
+  return disposed;
+}
+
+async function deleteIndexedDBDatabase(name: string, options: { blockedTimeoutMs?: number } = {}) {
+  if (typeof indexedDB === 'undefined') return true;
+
+  return new Promise<boolean>((resolve) => {
+    const request = indexedDB.deleteDatabase(name);
+    let settled = false;
+    let blockedTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    const resolveOnce = (deleted: boolean) => {
+      if (settled) return;
+
+      settled = true;
+
+      if (blockedTimeout) {
+        clearTimeout(blockedTimeout);
+      }
+
+      resolve(deleted);
+    };
+
+    request.onsuccess = () => resolveOnce(true);
+    request.onerror = () => {
+      Log.warn('[DB] failed to delete collab IndexedDB database', { name, error: request.error });
+      resolveOnce(false);
+    };
+
+    request.onblocked = () => {
+      Log.warn('[DB] delete collab IndexedDB database blocked', { name });
+
+      if (blockedTimeout) {
+        clearTimeout(blockedTimeout);
+      }
+
+      blockedTimeout = setTimeout(() => {
+        Log.warn('[DB] delete collab IndexedDB database timed out after blocked', { name });
+        resolveOnce(false);
+      }, options.blockedTimeoutMs ?? DELETE_INDEXEDDB_BLOCKED_TIMEOUT_MS);
+    };
+  });
+}
+
+async function deleteSharedCollabData(name: string, storageFence?: DatabaseStorageFence, databaseRestoreId?: string) {
+  if (typeof indexedDB === 'undefined') return true;
+
+  try {
+    await db.transaction('rw', db.collab_snapshots, db.collab_updates, db.collab_custom, async () => {
+      if (storageFence && !(await matchesDatabaseStorageFence(storageFence)))
+        throw new Error('Database storage generation changed');
+      if (databaseRestoreId) {
+        const current = await db.collab_custom.get([name, SHARED_STORAGE_EPOCH_KEY]);
+
+        if (current?.value === databaseRestoreId) return;
+      }
+
+      await db.collab_snapshots.delete(name);
+      await db.collab_updates.where('objectId').equals(name).delete();
+      await db.collab_custom.where('objectId').equals(name).delete();
+      // Keep a tombstone epoch: a provider in another tab must not append its
+      // previous branch after these stores have been cleared and reopened.
+      await db.collab_custom.put({
+        objectId: name,
+        key: SHARED_STORAGE_EPOCH_KEY,
+        value: databaseRestoreId ?? createSharedCollabSnapshotId(),
+      });
+    });
+
+    return true;
+  } catch (error) {
+    Log.warn('[DB] failed to delete shared collab data', { name, error });
+    return false;
+  }
+}
+
+/**
+ * Open the collaboration database, and return a function to close it
+ */
+export async function openCollabDB(name: string, options: OpenCollabOptions = {}): Promise<YDoc> {
+  const { doc } = await openCollabDBWithProvider(name, {
+    awaitSync: true,
+    expectedVersion: options.expectedVersion,
+    forceReset: options.forceReset,
+    databaseRestoreId: options.databaseRestoreId,
+  });
+
+  return doc;
+}
+
+export async function openCollabDBWithProvider(
+  name: string,
+  options?: {
+    awaitSync?: boolean;
+    expectedVersion?: string;
+    forceReset?: boolean;
+    skipCache?: boolean;
+    databaseRestoreId?: string;
+  }
+): Promise<{ doc: YDoc; provider: IndexeddbPersistence }> {
+  const capturedFence = await captureDatabaseStorageFence(name);
+  const publishedRestoreId = capturedFence.cacheEpoch;
+
+  // A fresh page load must never read the unversioned root when durable
+  // storage knows a restore that its synchronous shadow has not observed.
+  if (
+    (capturedFence.epoch !== null || typeof publishedRestoreId === 'string') &&
+    capturedFence.epoch !== publishedRestoreId
+  )
+    throw new DatabaseStorageGenerationChangedError();
+  const databaseRestoreId = options?.databaseRestoreId ?? publishedRestoreId ?? undefined;
+
+  if (options?.databaseRestoreId && options.databaseRestoreId !== publishedRestoreId) {
+    throw new DatabaseStorageGenerationChangedError();
+  }
+
+  const resolvedOptions = { ...options, databaseRestoreId };
+
+  // Ephemeral callers bypass cache entirely
+  if (resolvedOptions?.skipCache) {
+    const entry = await _openCollabDBWithProviderInternal(name, resolvedOptions);
+
+    if (resolvedOptions.awaitSync !== false) {
+      await waitForProviderEntry(name, entry);
+    }
+
+    if (entry.disposed) {
+      throw new CollabProviderDisposedError(name);
+    }
+
+    return { doc: entry.doc, provider: entry.provider as IndexeddbPersistence };
+  }
+
+  const needsReset =
+    resolvedOptions?.forceReset ||
+    resolvedOptions?.expectedVersion ||
+    (providerCache.has(name) && providerCache.get(name)?.databaseRestoreId !== databaseRestoreId);
+
+  if (needsReset) {
+    // Close stale connections before deleting/reopening this object's IndexedDB.
+    await disposeCachedProvider(name);
+  } else {
+    // Check providerCache for a resolved entry
+    const cached = providerCache.get(name);
+
+    if (cached) {
+      if (resolvedOptions?.awaitSync !== false) {
+        await waitForProviderEntry(name, cached);
+      }
+
+      if (cached.disposed) {
+        providerCache.delete(name);
+        throw new CollabProviderDisposedError(name);
+      }
+
+      return { doc: cached.doc, provider: cached.provider as IndexeddbPersistence };
+    }
+
+    // Join an in-flight open for the same name
+    const pending = pendingOpens.get(name);
+
+    if (pending) {
+      const entry = await pending;
+
+      if (entry.databaseRestoreId !== databaseRestoreId) {
+        await disposeCachedProvider(name);
+        return openCollabDBWithProvider(name, resolvedOptions);
+      }
+
+      if (resolvedOptions?.awaitSync !== false) {
+        await waitForProviderEntry(name, entry);
+      }
+
+      if (entry.disposed) {
+        throw new CollabProviderDisposedError(name);
+      }
+
+      return { doc: entry.doc, provider: entry.provider as IndexeddbPersistence };
+    }
+  }
+
+  // Create new entry and cache it
+  const promise = _openCollabDBWithProviderInternal(name, resolvedOptions);
+
+  pendingOpens.set(name, promise);
+
+  try {
+    const entry = await promise;
+
+    if (pendingOpens.get(name) === promise) {
+      providerCache.set(name, entry);
+
+      // Auto-evict if the doc is destroyed via an external path
+      // (e.g., handleAccessChanged, version revert) so subsequent
+      // callers don't receive a stale, destroyed Y.Doc.
+      entry.doc.on('destroy', () => {
+        if (providerCache.get(name) === entry) {
+          providerCache.delete(name);
+        }
+      });
+    }
+
+    if (resolvedOptions?.awaitSync !== false) {
+      await waitForProviderEntry(name, entry);
+    }
+
+    if (entry.disposed) {
+      throw new CollabProviderDisposedError(name);
+    }
+
+    return { doc: entry.doc, provider: entry.provider as IndexeddbPersistence };
+  } finally {
+    if (pendingOpens.get(name) === promise) {
+      pendingOpens.delete(name);
+    }
+  }
+}
+
+export async function openRowCollabDBWithProvider(
+  name: string,
+  options?: SharedCollabOpenOptions
+): Promise<{ doc: YDoc; provider: SharedIndexeddbPersistence }> {
+  if (options?.skipCache) {
+    const entry = await _openRowCollabDBWithProviderInternal(name, options);
+
+    if (options.awaitSync !== false) {
+      await waitForProviderEntry(name, entry);
+    }
+
+    if (entry.disposed) {
+      throw new CollabProviderDisposedError(name);
+    }
+
+    return { doc: entry.doc, provider: entry.provider as SharedIndexeddbPersistence };
+  }
+
+  const needsReset = options?.forceReset || options?.expectedVersion;
+
+  if (needsReset) {
+    await disposeRowProvider(name);
+  } else {
+    const cached = rowProviderCache.get(name);
+
+    if (cached) {
+      if (options?.awaitSync !== false) {
+        await waitForProviderEntry(name, cached);
+      }
+
+      if (cached.disposed) {
+        rowProviderCache.delete(name);
+        throw new CollabProviderDisposedError(name);
+      }
+
+      return { doc: cached.doc, provider: cached.provider as SharedIndexeddbPersistence };
+    }
+
+    const pending = pendingRowOpens.get(name);
+
+    if (pending) {
+      const entry = await pending;
+
+      if (options?.awaitSync !== false) {
+        await waitForProviderEntry(name, entry);
+      }
+
+      if (entry.disposed) {
+        throw new CollabProviderDisposedError(name);
+      }
+
+      return { doc: entry.doc, provider: entry.provider as SharedIndexeddbPersistence };
+    }
+  }
+
+  const promise = _openRowCollabDBWithProviderInternal(name, options);
+
+  pendingRowOpens.set(name, promise);
+
+  try {
+    const entry = await promise;
+
+    if (pendingRowOpens.get(name) === promise) {
+      rowProviderCache.set(name, entry);
+      entry.doc.on('destroy', () => {
+        if (rowProviderCache.get(name) === entry) {
+          rowProviderCache.delete(name);
+        }
+      });
+    }
+
+    if (options?.awaitSync !== false) {
+      await waitForProviderEntry(name, entry);
+    }
+
+    if (entry.disposed) {
+      throw new CollabProviderDisposedError(name);
+    }
+
+    return { doc: entry.doc, provider: entry.provider as SharedIndexeddbPersistence };
+  } finally {
+    if (pendingRowOpens.get(name) === promise) {
+      pendingRowOpens.delete(name);
+    }
+  }
+}
+
+async function _openRowCollabDBWithProviderInternal(
+  name: string,
+  options?: { expectedVersion?: string; forceReset?: boolean }
+): Promise<CachedProviderEntry> {
+  const startedAt = Date.now();
+  let doc = new Y.Doc({
+    guid: name,
+  }) as YDoc;
+  let provider = new SharedIndexeddbPersistence(name, doc);
+  let version = (await provider.get(name + '/version')) as string | undefined;
+
+  if (options?.forceReset || (options?.expectedVersion && version !== options.expectedVersion)) {
+    await provider.destroy();
+    doc.destroy();
+
+    const deleted = await deleteSharedCollabData(name);
+
+    if (!deleted) {
+      throw new Error(`Failed to delete shared IndexedDB data for collab ${name}`);
+    }
+
+    doc = new Y.Doc({
+      guid: name,
+    }) as YDoc;
+    provider = new SharedIndexeddbPersistence(name, doc);
+
+    if (options?.expectedVersion) {
+      await provider.set(name + '/version', options.expectedVersion);
+      version = options.expectedVersion;
+    } else {
+      version = undefined;
+    }
+  }
+
+  doc.version = version;
+
+  return createCachedProviderEntry(name, startedAt, doc, provider);
+}
+
+async function _openCollabDBWithProviderInternal(
+  name: string,
+  options?: { expectedVersion?: string; forceReset?: boolean; databaseRestoreId?: string }
+): Promise<CachedProviderEntry> {
+  const startedAt = Date.now();
+  const storageName = databaseRootStorageName(name, options?.databaseRestoreId);
+
+  Log.debug('[DB] openCollabDBWithProvider start', {
+    name,
+    alreadyOpened: openedSet.has(name),
+  });
+
+  let doc = new Y.Doc({
+    guid: name,
+  }) as YDoc;
+
+  await ensureYjsStores(storageName);
+
+  let provider = new IndexeddbPersistence(storageName, doc);
+  let version = await provider.get(name + '/version');
+
+  if (options?.databaseRestoreId) {
+    // Another tab can already be initializing this same R namespace. Missing
+    // version metadata is initialization, never permission to delete its data.
+    if (
+      options.forceReset ||
+      (options.expectedVersion && version !== undefined && version !== null && version !== options.expectedVersion)
+    ) {
+      await provider.destroy();
+      doc.destroy();
+      throw new Error('The restored database cache version is inconsistent; reload could not safely replace it');
+    }
+
+    if (options.expectedVersion && (version === undefined || version === null)) {
+      await provider.set(name + '/version', options.expectedVersion);
+      version = options.expectedVersion;
+    }
+  } else if (options?.forceReset || (options?.expectedVersion && version !== options.expectedVersion)) {
+    await provider.destroy();
+    doc.destroy();
+
+    const deleted = await deleteIndexedDBDatabase(storageName);
+
+    if (!deleted) {
+      throw new Error(`Failed to delete IndexedDB database for collab ${name}`);
+    }
+
+    await ensureYjsStores(storageName);
+    doc = new Y.Doc({
+      guid: name,
+    }) as YDoc;
+    provider = new IndexeddbPersistence(storageName, doc);
+
+    if (options?.expectedVersion) {
+      await provider.set(name + '/version', options.expectedVersion);
+      version = options.expectedVersion;
+    } else {
+      version = undefined;
+    }
+  }
+
+  doc.version = version;
+
+  const entry = createCachedProviderEntry(name, startedAt, doc, provider);
+
+  entry.databaseRestoreId = options?.databaseRestoreId;
+  return entry;
+}
+
+function databaseRootStorageName(name: string, databaseRestoreId?: string): string {
+  return databaseRestoreId ? `${name}:database-restore:${databaseRestoreId}` : name;
+}
+
+export async function closeCollabDB(name: string) {
+  if (openedSet.has(name)) {
+    openedSet.delete(name);
+  }
+
+  const disposed = await disposeCachedProvider(name);
+  const rowDisposed = await disposeRowProvider(name);
+
+  if (disposed || rowDisposed) {
+    return;
+  }
+
+  // No cached entry — create a temp provider so y-indexeddb has no live connection.
+  const doc = new Y.Doc({
+    guid: name,
+  });
+
+  const provider = new IndexeddbPersistence(name, doc);
+
+  await provider.destroy();
+  doc.destroy();
+}
+
+/**
+ * Destroy any in-memory provider/doc for the object and delete its y-indexeddb
+ * database. Call this only for authoritative invalidations: access revoked,
+ * object deleted, version reset/force reset, or row deleted.
+ */
+export async function deleteCollabDB(
+  name: string,
+  options: {
+    destroyDoc?: boolean;
+    storageFence?: DatabaseStorageFence;
+    databaseRestoreId?: string;
+    databaseId?: string;
+  } = {}
+) {
+  const storageFence =
+    options.storageFence ??
+    (options.databaseRestoreId
+      ? {
+          databaseId: options.databaseId ?? name,
+          epoch: options.databaseRestoreId,
+          cacheEpoch: options.databaseRestoreId,
+        }
+      : undefined);
+
+  if (storageFence && !isDatabaseStorageFenceCurrent(storageFence)) return false;
+  if (!name) return false;
+
+  if (openedSet.has(name)) {
+    openedSet.delete(name);
+  }
+
+  ensuredStores.delete(name);
+  await disposeCachedProvider(name, options);
+  await disposeRowProvider(name, options);
+
+  // Restored roots live in a namespace selected by R. The legacy root can stay
+  // open in another tab without blocking replacement or affecting R's bytes.
+  const currentStorageName = databaseRootStorageName(name, readDatabaseCacheEpoch(name) ?? undefined);
+  const [legacyDeleted, generationDeleted, sharedDataDeleted] = await Promise.all([
+    options.databaseRestoreId ? true : deleteIndexedDBDatabase(name),
+    !options.databaseRestoreId && currentStorageName !== name ? deleteIndexedDBDatabase(currentStorageName) : true,
+    deleteSharedCollabData(name, storageFence, options.databaseRestoreId),
+  ]);
+  const indexedDbDeleted = legacyDeleted && generationDeleted;
+
+  if (indexedDbDeleted && sharedDataDeleted) {
+    Log.debug('[DB] deleted collab IndexedDB database', { name });
+  }
+
+  return indexedDbDeleted && sharedDataDeleted;
+}
+
+/**
+ * Synchronously evict an entry from the provider cache.
+ * Used by deleteRow / deleteRowSubDoc after they destroy the Y.Doc themselves.
+ */
+export function evictProviderCache(name: string) {
+  providerCache.delete(name);
+  pendingOpens.delete(name);
+  rowProviderCache.delete(name);
+  pendingRowOpens.delete(name);
+}
+
+/**
+ * Return the cached Y.Doc for a given name, if one exists in the provider cache.
+ */
+export function getCachedProviderDoc(name: string): YDoc | undefined {
+  return providerCache.get(name)?.doc ?? rowProviderCache.get(name)?.doc;
+}
+
+/** The canonical row provider owns the durability result for its live document. */
+export function getCachedRowProvider(name: string): SharedIndexeddbPersistence | undefined {
+  const entry = rowProviderCache.get(name);
+
+  return entry && !entry.disposed ? entry.provider as SharedIndexeddbPersistence : undefined;
+}
+
+function removeLocalStorageKeysByPrefix(prefix: string) {
+  if (typeof localStorage === 'undefined') return;
+
+  const keysToRemove: string[] = [];
+
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+
+    if (key?.startsWith(prefix)) {
+      keysToRemove.push(key);
+    }
+  }
+
+  keysToRemove.forEach((key) => localStorage.removeItem(key));
+}
+
+function clearDatabaseCheckpointsForDeletedDatabases(results: Array<{ name: string; deleted: boolean }>) {
+  if (typeof localStorage === 'undefined') return;
+
+  const sharedCacheDeleted = results.some(({ name, deleted }) => deleted && name === db.name);
+  const allDatabasesDeleted = results.every((result) => result.deleted);
+
+  if (sharedCacheDeleted || allDatabasesDeleted) {
+    removeLocalStorageKeysByPrefix(DATABASE_BLOB_RID_PREFIX);
+    // The synchronous shadow and committed restore markers describe the cache
+    // that was just deleted. Reopening must discover and reload its generation.
+    // Pending server restore jobs have separate keys and must survive this reset.
+    removeLocalStorageKeysByPrefix(DATABASE_CACHE_EPOCH_PREFIX);
+    removeLocalStorageKeysByPrefix(DATABASE_RESTORE_MARKER_PREFIX);
+    return;
+  }
+
+  const deletedDatabaseIds = new Set<string>();
+  const blockedDatabaseIds = new Set<string>();
+
+  results.forEach(({ name, deleted }) => {
+    if (!name) return;
+    const markerIndex = name.indexOf('_rows_');
+
+    if (markerIndex <= 0) return;
+    const databaseId = name.slice(0, markerIndex);
+
+    if (!databaseId) return;
+    if (deleted) {
+      deletedDatabaseIds.add(databaseId);
+    } else {
+      blockedDatabaseIds.add(databaseId);
+    }
+  });
+
+  deletedDatabaseIds.forEach((databaseId) => {
+    if (blockedDatabaseIds.has(databaseId)) return;
+    localStorage.removeItem(`${DATABASE_BLOB_RID_PREFIX}${databaseId}`);
+  });
+}
+
+export async function clearData() {
+  const databases = await indexedDB.databases();
+
+  const deleteDatabase = async (dbInfo: IDBDatabaseInfo): Promise<{ name: string; deleted: boolean }> => {
+    const dbName = dbInfo.name;
+
+    if (!dbName) return { name: '', deleted: false };
+
+    return new Promise((resolve) => {
+      const request = indexedDB.open(dbName);
+
+      request.onsuccess = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
+
+        db.close();
+
+        const deleteRequest = indexedDB.deleteDatabase(dbName);
+
+        deleteRequest.onsuccess = () => {
+          Log.debug(`Database ${dbName} deleted successfully`);
+          resolve({ name: dbName, deleted: true });
+        };
+
+        deleteRequest.onerror = (event) => {
+          console.error(`Error deleting database ${dbName}`, event);
+          resolve({ name: dbName, deleted: false });
+        };
+
+        deleteRequest.onblocked = () => {
+          console.warn(`Delete operation blocked for database ${dbName}`);
+          resolve({ name: dbName, deleted: false });
+        };
+      };
+
+      request.onerror = (event) => {
+        console.error(`Error opening database ${dbName}`, event);
+        resolve({ name: dbName, deleted: false });
+      };
+    });
+  };
+
+  try {
+    const results = await Promise.all(databases.map(deleteDatabase));
+
+    try {
+      clearDatabaseCheckpointsForDeletedDatabases(results);
+    } catch {
+      // Ignore localStorage failures (private mode/quota).
+    }
+
+    return results.every((result) => result.deleted);
+  } catch (error) {
+    console.error('Error during database deletion process:', error);
+    return false;
+  }
+}
+
+export const __dbTestUtils = {
+  SharedIndexeddbPersistence,
+  deleteSharedCollabData,
+  createCachedProviderEntry,
+  clearDatabaseCheckpointsForDeletedDatabases,
+  deleteIndexedDBDatabase,
+  destroyProviderEntry,
+  readSharedCollabRecordsForSync,
+  waitForProviderEntry,
+};
