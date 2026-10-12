@@ -1,10 +1,11 @@
+**/node_modules/
 node_modules/
-build/
-dist/
-coverage/
+**/dist/
+**/build/
+.antigravity/
+**/.antigravity/
 .DS_Store
 *.log
 .env*
 !.env.example
 data/
-.antigravity/
