@@ -223,6 +223,59 @@ async function startServer() {
     }
   });
 
+  // Local offline AppFlowy workspace & user endpoints
+  app.get("/api/user/workspace", (_req, res) => {
+    res.json({
+      code: 0,
+      data: {
+        user_profile: { uuid: "hronika-local-user" },
+        visiting_workspace: {
+          id: "hronika-main-workspace",
+          name: "Svici",
+          icon: "📜",
+          role: "Owner"
+        },
+        workspaces: [
+          {
+            id: "hronika-main-workspace",
+            name: "Svici",
+            icon: "📜",
+            role: "Owner"
+          }
+        ]
+      }
+    });
+  });
+
+  app.get("/api/user/profile", (_req, res) => {
+    res.json({
+      code: 0,
+      data: {
+        uuid: "hronika-local-user",
+        name: "Korisnik",
+        email: "korisnik@hronika.plus"
+      }
+    });
+  });
+
+  app.get("/api/workspace/:workspaceId/view/:viewId", (req, res) => {
+    res.json({
+      code: 0,
+      data: {
+        id: req.params.viewId || "hronika-main-workspace",
+        name: "Svici",
+        children: []
+      }
+    });
+  });
+
+  app.get("/gotrue/user", (_req, res) => {
+    res.json({
+      id: "hronika-local-user",
+      email: "korisnik@hronika.plus"
+    });
+  });
+
   // Support contact form endpoint (sending to hronika.timeline@gmail.com with Reply-To user email)
   app.post("/api/support", async (req, res) => {
     const { name, email, topic, message } = req.body;

@@ -34,7 +34,8 @@ import {
   Tag as TagIcon,
   Upload,
   Pencil,
-  Maximize2
+  Maximize2,
+  ScrollText
 } from "lucide-react";
 import { TimelineItem, TagConfig, NotionColor } from "../types";
 import { formatRange } from "../utils";
@@ -159,6 +160,7 @@ interface DraggableEventCardProps {
   onClose: () => void;
   onUpdateItem: (updated: TimelineItem) => void;
   onEditFullModal?: (item: TimelineItem) => void;
+  onOpenInSvici?: (item: TimelineItem) => void;
   theme: "dark" | "light";
   skin: string;
   lang: LangType;
@@ -192,6 +194,7 @@ export function DraggableEventCard({
   onClose,
   onUpdateItem,
   onEditFullModal,
+  onOpenInSvici,
   theme,
   skin,
   lang,
@@ -1366,6 +1369,18 @@ export function DraggableEventCard({
                 <Pencil className="w-3.5 h-3.5" />
               </button>
             )}
+            {onOpenInSvici && (
+              <button
+                type="button"
+                onClick={() => onOpenInSvici(item)}
+                className={`p-1.5 rounded-lg transition cursor-pointer ${
+                  isLightTheme ? "hover:bg-slate-200 text-[#2f6d5c] hover:text-[#3e927c]" : "hover:bg-white/5 text-[#83d6bd] hover:text-[#3e927c]"
+                }`}
+                title={isEn ? "Open in Scrolls & Workspace" : "Otvori u Svicima / Radnom prostoru"}
+              >
+                <ScrollText className="w-3.5 h-3.5" />
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setIsPinned(!isPinned)}
@@ -1486,6 +1501,15 @@ export function DraggableEventCard({
                 title={isEn ? "Open full modal" : "Otvori detaljan prozor"}
               >
                 <Edit3 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {onOpenInSvici && (
+              <button
+                onClick={() => onOpenInSvici(item)}
+                className="p-1.5 rounded-lg hover:bg-[#3e927c]/20 text-[#3e927c] transition cursor-pointer"
+                title={isEn ? "Open in Scrolls & Workspace" : "Otvori u Svicima / Radnom prostoru"}
+              >
+                <ScrollText className="w-3.5 h-3.5" />
               </button>
             )}
             <button

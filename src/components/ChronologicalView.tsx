@@ -399,7 +399,8 @@ export function ChronologicalView({
                         return (
                           <div
                             key={item.id}
-                            group="card"
+                            data-group="card"
+                            {...({ group: "card" } as any)}
                             onClick={() => onSelectDetailItem(item)}
                             style={{
                               borderWidth: "1px",

@@ -85,39 +85,36 @@ export const SKINS_CONFIG = {
   pro_studio: {
     name: "Pro Studio",
     nameEn: "Pro Studio",
-    primary: "#10b981",
-    primaryHex: "#10b981",
-    borderClass: "border-[#10b981]",
-    bgClass: "bg-[#10b981]",
-    hoverBgClass: "hover:bg-[#059669]",
-    textClass: "text-[#10b981]",
-    shadowClass: "shadow-[#10b981]/25",
-    gradientText: "from-[#34d399] via-[#10b981] to-[#047857]",
-    accentColor: "emerald",
-    tagBg: "bg-[#10b981]/15 text-[#34d399] border border-[#10b981]/30 font-mono"
+    primary: "#3e927c",
+    primaryHex: "#3e927c",
+    borderClass: "border-[#3e927c]",
+    bgClass: "bg-[#3e927c]",
+    hoverBgClass: "hover:bg-[#337c69]",
+    textClass: "text-[#3e927c]",
+    shadowClass: "shadow-[#3e927c]/25",
+    gradientText: "from-[#83d6bd] via-[#3e927c] to-[#00382c]",
+    accentColor: "mint",
+    tagBg: "bg-[#3e927c]/15 text-[#83d6bd] border border-[#3e927c]/30 font-mono"
   },
   hronika: {
     name: "Hronika",
     nameEn: "Chronicle",
-    primary: "#1e433a",
-    primaryHex: "#1e433a",
-    borderClass: "border-[rgba(255,255,255,0.13)]",
-    bgClass: "bg-[#1e433a]",
-    hoverBgClass: "hover:bg-[#28594d]",
-    textClass: "text-[#74BAA0]",
+    primary: "#3e927c",
+    primaryHex: "#3e927c",
+    borderClass: "border-[rgba(255,255,255,0.08)]",
+    bgClass: "bg-[#3e927c]",
+    hoverBgClass: "hover:bg-[#337c69]",
+    textClass: "text-[#3e927c]",
     shadowClass: "shadow-black/50",
-    gradientText: "from-white via-[#ffffff] to-[#1e433a]",
-    accentColor: "emerald",
-    tagBg: "bg-[#2a2a2a] text-white/90 border border-white/10"
+    gradientText: "from-white via-[#83d6bd] to-[#3e927c]",
+    accentColor: "mint",
+    tagBg: "bg-[#202020] text-white/90 border border-white/10"
   }
 };
 
 export function getSkinCardBorderColor(skinName?: string, themeMode?: "light" | "dark"): string {
   const isLight = themeMode === "light";
-  if (skinName === "pro_studio") {
-    return isLight ? "rgba(16, 185, 129, 0.4)" : "rgba(56, 189, 248, 0.35)";
-  }
-  return isLight ? "rgba(55,53,47,0.16)" : "rgba(255,255,255,0.13)";
+  return isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.08)";
 }
 
 export function getSkinName(skinKey: string, lang: LangType = "sr"): string {

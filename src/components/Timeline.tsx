@@ -1021,7 +1021,7 @@ export function Timeline({
                 <div
                   key={laneConfig.groupName}
                   onDoubleClick={(e) => {
-                    if ((e.target as HTMLElement).closest('[group="card"]') || (e.target as HTMLElement).closest('.noclick')) return;
+                    if ((e.target as HTMLElement).closest('[data-group="card"], [group="card"]') || (e.target as HTMLElement).closest('.noclick')) return;
                     onAddNewItem?.(laneConfig.groupName);
                   }}
                   className={`relative transition-colors duration-150 ${laneBgClass}`}
@@ -1081,7 +1081,8 @@ export function Timeline({
                       return (
                         <div
                           key={item.id}
-                          group="card"
+                          data-group="card"
+                          {...({ group: "card" } as any)}
                           className={`absolute group/card rounded-lg flex flex-col justify-center px-2.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer select-text duration-205 ${alternatingBgClass}`}
                           style={{
                             left: `${xStart}px`,
@@ -1259,7 +1260,8 @@ export function Timeline({
                           {/* Float Card Text box (only shown when pinned/enabled) */}
                           {showSingleYearCards && (
                             <div
-                              group="card"
+                              data-group="card"
+                              {...({ group: "card" } as any)}
                               className={`rounded-lg shadow-xl px-2 ml-1 text-left relative transition flex ${alternatingBgClass} ${
                                 isZoomedOut 
                                   ? "items-center py-0 max-w-[240px]" 

@@ -35,7 +35,8 @@ import {
   ChevronsLeft,
   ChevronsRight,
   PanelLeft,
-  Clock
+  Clock,
+  FolderKanban
 } from "lucide-react";
 import { TimelineFilter, TagConfig, NotionColor, MainSection } from "../types";
 import { translations, LangType, getAppTranslations } from "../translations";
@@ -517,7 +518,7 @@ export function Sidebar({
               </span>
             </button>
 
-            {/* 2. Svici */}
+            {/* 2. Svici (Baza & Radni prostor) */}
             <button
               type="button"
               id="sidebar_btn_svici"
@@ -526,19 +527,19 @@ export function Sidebar({
                 onSelectSection?.("svici");
               }}
               className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-left ${
-                activeSection === "svici"
-                  ? (isLightTheme ? "bg-[#ffab2e]/15 text-[#b36d00] font-bold shadow-xs" : "bg-[#ffab2e]/20 text-[#ffb95d] font-bold shadow-xs")
+                activeSection === "svici" || activeSection === "workspace"
+                  ? (isLightTheme ? "bg-[#3e927c]/15 text-[#2f6d5c] font-bold shadow-xs" : "bg-[#3e927c]/20 text-[#83d6bd] font-bold shadow-xs")
                   : (isLightTheme ? "hover:bg-slate-200/60 text-slate-700" : "hover:bg-white/5 text-[#a1a1aa] hover:text-[#f4f4f5]")
               }`}
             >
               <div className="flex items-center gap-2">
-                <ScrollText className="w-4 h-4 text-[#ffab2e] shrink-0" />
+                <ScrollText className="w-4 h-4 text-[#3e927c] shrink-0" />
                 <span>Svici</span>
               </div>
               <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
                 isLightTheme ? "bg-slate-200/60 text-slate-600" : "bg-white/5 text-[#71717a]"
               }`}>
-                {lang === "sr" ? "Rukopisi" : "Scrolls"}
+                {lang === "sr" ? "Radni prostor" : "Workspace"}
               </span>
             </button>
 

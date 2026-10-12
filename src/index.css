@@ -26,10 +26,10 @@
 
   /* Primary Accent: Mint Teal */
   --color-brand-mint: #3e927c;
-  --color-brand-mint-hover: #4aa88f;
+  --color-brand-mint-hover: #337c69;
   --color-brand-mint-light: #83d6bd;
   --color-brand-mint-dark: #00382c;
-  --color-brand-mint-container: #4c9f88;
+  --color-brand-mint-container: rgba(62, 146, 124, 0.15);
 
   /* Secondary Accent: Warm Amber */
   --color-brand-amber: #ffab2e;
@@ -48,12 +48,193 @@
   --font-serif: "Lora", "Merriweather", Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --app-current-font: var(--font-hronika);
+
+  /* Light Theme Defaults */
+  --color-canvas-bg: #FAF8F5;
+  --color-sidebar-bg: #ffffff;
+  --color-surface-bg: #ffffff;
+  --color-surface-elevated: #f4f2ee;
+  --color-text-main: #18181b;
+  --color-text-muted: #71717a;
+  --color-border-subtle: rgba(0, 0, 0, 0.08);
+
+  /* Light Mode Primary Accent: Mint Teal */
+  --color-primary: #3e927c;
+  --color-primary-hover: #337c69;
+  --color-primary-light: #83d6bd;
+  --color-primary-container: rgba(62, 146, 124, 0.12);
+}
+
+.theme-dark {
+  --color-canvas-bg: #0f0f11;
+  --color-sidebar-bg: #000000;
+  --color-surface-bg: #191919;
+  --color-surface-elevated: #202020;
+  --color-text-main: #f4f4f5;
+  --color-text-muted: #a1a1aa;
+  --color-border-subtle: rgba(255, 255, 255, 0.08);
+
+  /* Dark Mode Primary Accent: Mint Teal */
+  --color-primary: #3e927c;
+  --color-primary-hover: #4aa88f;
+  --color-primary-light: #83d6bd;
+  --color-primary-container: rgba(62, 146, 124, 0.18);
+}
+
+.theme-light {
+  --color-canvas-bg: #FAF8F5;
+  --color-sidebar-bg: #ffffff;
+  --color-surface-bg: #ffffff;
+  --color-surface-elevated: #f4f2ee;
+  --color-text-main: #18181b;
+  --color-text-muted: #71717a;
+  --color-border-subtle: rgba(0, 0, 0, 0.08);
+
+  /* Light Mode Primary Accent: Mint Teal */
+  --color-primary: #3e927c;
+  --color-primary-hover: #337c69;
+  --color-primary-light: #83d6bd;
+  --color-primary-container: rgba(62, 146, 124, 0.12);
 }
 
 /* =========================================================
-   1. ISOLATED FONT SAMPLE PREVIEW CLASSES
-   These classes ensure "Ab" previews are NEVER overridden
-   by parent or global font styles.
+   1. GLOBAL CANVAS & THEME BACKGROUND ENFORCEMENT
+   - Dark theme canvas: strictly #0f0f11
+   - Light theme canvas: strictly #FAF8F5
+   - Light theme primary accent: strictly #3e927c
+   ========================================================= */
+html, body {
+  font-family: var(--app-current-font);
+  background-color: #FAF8F5;
+  color: #18181b;
+  margin: 0;
+  padding: 0;
+}
+
+html.theme-dark,
+body.theme-dark,
+.theme-dark {
+  background-color: #0f0f11 !important;
+  color: #f4f4f5 !important;
+}
+
+html.theme-light,
+body.theme-light,
+.theme-light {
+  background-color: #FAF8F5 !important;
+  color: #18181b !important;
+}
+
+/* Header bar styling */
+.theme-dark header {
+  background-color: rgba(15, 15, 17, 0.95) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5) !important;
+}
+
+.theme-light header {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Sidebar panel styling: pure black (#000000) in dark, pure white (#ffffff) in light */
+.sidebar-panel {
+  margin: 0 !important;
+  border-radius: 0 !important;
+  height: 100% !important;
+  box-shadow: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+  border-left: none !important;
+}
+
+.theme-dark .sidebar-panel {
+  background-color: #000000 !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.theme-light .sidebar-panel {
+  background-color: #ffffff !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Timeline canvas background */
+.theme-dark #timeline_parent {
+  padding: 0 !important;
+  background-color: #0f0f11 !important;
+}
+
+.theme-light #timeline_parent {
+  padding: 0 !important;
+  background-color: #FAF8F5 !important;
+}
+
+/* =========================================================
+   2. PRIMARY ACCENT BUTTONS & CONTROLS (MINT TEAL #3e927c)
+   ========================================================= */
+#btn_add_item_open,
+.btn-primary,
+.btn-accent {
+  background-color: #3e927c !important;
+  color: #ffffff !important;
+  border-color: #3e927c !important;
+  box-shadow: 0 1px 3px rgba(62, 146, 124, 0.25) !important;
+  transition: all 0.15s ease-in-out !important;
+}
+
+#btn_add_item_open:hover,
+.btn-primary:hover,
+.btn-accent:hover {
+  background-color: #337c69 !important;
+  border-color: #337c69 !important;
+  box-shadow: 0 2px 6px rgba(62, 146, 124, 0.35) !important;
+}
+
+#btn_add_item_open span,
+#btn_add_item_open svg,
+.btn-primary span,
+.btn-primary svg,
+.btn-accent span,
+.btn-accent svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+/* Light Mode specific primary accents */
+.theme-light .text-brand-mint {
+  color: #3e927c !important;
+}
+
+.theme-light .bg-brand-mint {
+  background-color: #3e927c !important;
+  color: #ffffff !important;
+}
+
+.theme-light .border-brand-mint {
+  border-color: #3e927c !important;
+}
+
+/* Focus outline ring */
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 1.5px solid #3e927c !important;
+  outline-offset: 1px !important;
+}
+
+button:focus:not(:focus-visible),
+[role="button"]:focus:not(:focus-visible),
+a:focus:not(:focus-visible) {
+  outline: none !important;
+}
+
+/* =========================================================
+   3. ISOLATED FONT SAMPLE PREVIEW CLASSES
+   Ensures "Ab" previews are NEVER overridden by parent font styles.
    ========================================================= */
 .font-sample-inter,
 span.font-sample-inter,
@@ -86,9 +267,7 @@ body * .font-sample-mono {
 }
 
 /* =========================================================
-   2. GLOBAL FONT PREFERENCE CLASSES
-   When active, they apply the chosen font to ALL text
-   across the website (except isolated .font-sample-* tags).
+   4. GLOBAL FONT PREFERENCE CLASSES
    ========================================================= */
 html.font-pref-inter,
 html.font-pref-inter body,
@@ -120,25 +299,9 @@ body.font-pref-mono *:not([class*="font-sample-"]),
   font-family: var(--font-mono) !important;
 }
 
-body {
-  font-family: var(--app-current-font);
-  background-color: #FAF8F5;
-  color: #1e293b;
-}
-
-body.theme-dark,
-html.theme-dark {
-  background-color: #0f0f11;
-  color: #f4f4f5;
-}
-
-body.theme-light,
-html.theme-light {
-  background-color: #FAF8F5;
-  color: #18181b;
-}
-
-/* Global Placeholder Color for Hronika */
+/* =========================================================
+   5. PLACEHOLDERS, LABELS & SCROLLBAR
+   ========================================================= */
 input::placeholder,
 textarea::placeholder,
 ::placeholder {
@@ -147,7 +310,43 @@ textarea::placeholder,
   -webkit-text-fill-color: #7d7a75 !important;
 }
 
-/* App Brand Title Case Normalization - Never full CAPS in any theme or font */
+/* Minimal Modern Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 120, 0.25);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 120, 0.45);
+}
+
+.theme-dark ::-webkit-scrollbar-thumb {
+  background: #2a2a2c;
+}
+
+.theme-dark ::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3d;
+}
+
+.theme-light ::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+}
+
+.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
+}
+
+/* Brand casing protection */
 .app-brand-title,
 .app-brand-title *,
 header h1,
@@ -156,563 +355,47 @@ header h1 * {
   font-variant: normal !important;
 }
 
-/* Premium Scrollbar */
-::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+/* Category row reset */
+.cat-row {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
-::-webkit-scrollbar-track {
-  background: #0d0d10;
-}
-
-.theme-light ::-webkit-scrollbar-track {
-  background: #f1f5f9;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #373735;
-  border-radius: 6px;
-  border: 2px solid transparent;
-}
-
-.theme-light ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #f59e0b;
-}
-
-/* Global Focus Normalization: eliminate browser blue/white focus rings */
-button:focus,
-button:focus-visible,
-[role="button"]:focus,
-[role="button"]:focus-visible,
-a:focus,
-a:focus-visible {
+.cat-row button {
   outline: none !important;
 }
 
-/* ==========================================
-   THEME PALETTE REFINEMENTS (Obsidian Slate & Mint Teal)
-   ========================================== */
-.theme-light {
-  background-color: #FAF8F5 !important;
-  color: #18181b !important;
-}
-
-.theme-dark {
-  background-color: #0f0f11 !important;
-  color: #f4f4f5 !important;
-}
-
-/* Elevate sidebar and header with clean vertical divider & border hierarchy */
-.theme-light header {
-  background-color: rgba(255, 255, 255, 0.95) !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03) !important;
-}
-
-.theme-dark header {
-  background-color: rgba(15, 15, 17, 0.95) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5) !important;
-}
-
-.sidebar-panel {
-  margin: 0 !important;
-  border-radius: 0 !important;
-  height: 100% !important;
-  box-shadow: none !important;
-  border-top: none !important;
-  border-bottom: none !important;
-  border-left: none !important;
-}
-
-.theme-light .sidebar-panel {
-  background-color: #ffffff !important;
-  border-right: 1px solid rgba(0, 0, 0, 0.08) !important;
-}
-
-.theme-dark .sidebar-panel {
-  background-color: #000000 !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
-}
-
-.theme-light #timeline_parent {
-  padding: 0 !important;
-}
-
-.theme-light #timeline_parent > div {
-  border-radius: 0 !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-.theme-light .card-modern-item {
-  background-color: #ffffff !important;
-  border: 1.5px solid #e2e8f0 !important;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02) !important;
-}
-
-/* ==========================================
-   SKIN - HRONIKA / CHRONICLE (Notion Dark Theme Signature)
-   Based on Notion Design System: https://github.com/tapeo/notion-any-ai/blob/main/DESIGN.md
-   ========================================== */
-.skin-hronika.theme-dark {
-  background-color: #191919 !important;
-  color: #ffffff !important;
-}
-
-.skin-hronika.theme-dark header {
-  background-color: #202020 !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.09) !important;
-  box-shadow: none !important;
-  color: #ffffff !important;
-}
-
-.skin-hronika.theme-dark .sidebar-panel {
-  background-color: #202020 !important;
-  border: none !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.09) !important;
-  border-radius: 0 !important;
-  margin: 0 !important;
-  height: 100% !important;
-  box-shadow: none !important;
-  color: #ffffff !important;
-}
-
-.skin-hronika.theme-dark #timeline_parent {
-  padding: 0 !important;
-  background-color: #191919 !important;
-}
-
-.skin-hronika.theme-dark #timeline_parent > div {
-  border-radius: 0 !important;
-  border: none !important;
-  box-shadow: none !important;
-  background-color: #191919 !important;
-}
-
-.skin-hronika.theme-dark [group="card"] {
-  background-color: #2a2a2a !important;
-  border: 1px solid rgba(255, 255, 255, 0.13) !important;
-  border-radius: 6px !important;
-  color: #ffffff !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-.skin-hronika.theme-dark [group="card"]:hover {
-  background-color: #303030 !important;
-  border-color: rgba(255, 255, 255, 0.25) !important;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
-}
-
-.skin-hronika.theme-dark .card-modern-item {
-  background-color: #2a2a2a !important;
-  border: 1px solid rgba(255, 255, 255, 0.13) !important;
-  border-radius: 6px !important;
-  color: #ffffff !important;
-}
-
-.skin-hronika.theme-dark #btn_add_item_open,
-.skin-hronika #btn_add_item_open {
-  background-color: #1e433a !important;
-  color: #ffffff !important;
-  box-shadow: 0 2px 8px rgba(30, 67, 58, 0.4) !important;
-}
-
-.skin-hronika.theme-dark #btn_add_item_open:hover,
-.skin-hronika #btn_add_item_open:hover {
-  background-color: #28594d !important;
-}
-
-.skin-hronika.theme-dark .draggable-event-card {
-  background-color: #202020 !important;
-  border-color: rgba(255, 255, 255, 0.13) !important;
-  color: #ffffff !important;
-}
-
-.skin-hronika.theme-dark .draggable-event-card > div:first-child {
-  background-color: #252525 !important;
-  border-bottom-color: rgba(255, 255, 255, 0.09) !important;
-}
-
-.skin-hronika.theme-light .draggable-event-card {
-  background-color: #ffffff !important;
-  border-color: rgba(55, 53, 47, 0.16) !important;
-  color: #37352f !important;
-}
-
-.skin-hronika.theme-light .draggable-event-card > div:first-child {
-  background-color: #f7f6f3 !important;
-  border-bottom-color: rgba(55, 53, 47, 0.09) !important;
-}
-
-/* Light mode counterpart for Hronika / Chronicle based on Notion Light Theme */
-.skin-hronika.theme-light {
-  background-color: #ffffff !important;
-  color: #37352f !important;
-}
-
-.skin-hronika.theme-light header {
-  background-color: #f7f6f3 !important;
-  border-bottom: 1px solid rgba(55, 53, 47, 0.09) !important;
-  box-shadow: none !important;
-  color: #37352f !important;
-}
-
-.skin-hronika.theme-light .sidebar-panel {
-  background-color: #f7f6f3 !important;
-  border: none !important;
-  border-right: 1px solid rgba(55, 53, 47, 0.09) !important;
-  border-radius: 0 !important;
-  margin: 0 !important;
-  height: 100% !important;
-  box-shadow: none !important;
-  color: #37352f !important;
-}
-
-.skin-hronika.theme-light #timeline_parent {
-  padding: 0 !important;
-  background-color: #ffffff !important;
-}
-
-.skin-hronika.theme-light #timeline_parent > div {
-  border-radius: 0 !important;
-  border: none !important;
-  box-shadow: none !important;
-  background-color: #ffffff !important;
-}
-
-.skin-hronika.theme-light [group="card"] {
-  background-color: #ffffff !important;
-  border: 1px solid rgba(55, 53, 47, 0.09) !important;
-  border-radius: 6px !important;
-  color: #37352f !important;
-  box-shadow: rgba(15, 15, 15, 0.05) 0 1px 2px !important;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-.skin-hronika.theme-light [group="card"]:hover {
-  background-color: #ffffff !important;
-  border-color: rgba(55, 53, 47, 0.16) !important;
-  box-shadow: rgba(15, 15, 15, 0.08) 0 4px 12px !important;
-}
-
-.skin-hronika.theme-light .card-modern-item {
-  background-color: #ffffff !important;
-  border: 1px solid rgba(55, 53, 47, 0.09) !important;
-  border-radius: 6px !important;
-  color: #37352f !important;
-}
-
-/* ==========================================
-   SKIN - PRO STUDIO (STITCH REDIZAJN — PRECISION DARK MINIMALIST)
-   Inspirisano Stitch dizajnom:
-   Duboki opsidijan void (#060910), panel površine (#0A0F1D),
-   kartice (#131C33), hirurški precizne 1px ivice (rgba(35, 48, 77, 0.7)),
-   akcentni smaragd (#10B981), električni cijan (#38BDF8) i topli ćilibar (#F59E0B).
-   ========================================== */
-
-/* --- Light token layer (Editorial Archival) --- */
-.skin-pro_studio.theme-light {
-  --studio-bg-main:       #FAF9F6;
-  --studio-bg-surface:    #FFFFFF;
-  --studio-bg-card:       #FFFFFF;
-  --studio-text-primary:  #0F172A;
-  --studio-text-secondary:#475569;
-  --studio-text-muted:    #64748B;
-  --studio-border:        #E2E8F0;
-  --studio-border-subtle: rgba(0, 0, 0, 0.06);
-  --studio-border-grid:   #F1F5F9;
-  --studio-accent:        #10B981;
-  --studio-accent-hover:  #059669;
-  --studio-accent-glow:   rgba(16, 185, 129, 0.15);
-  --studio-cyan:          #0284C7;
-  --studio-amber:         #D97706;
-
-  background-color: var(--studio-bg-main) !important;
-  color: var(--studio-text-primary) !important;
-}
-
-/* --- Dark token layer (Obsidian Void Precision Minimalist) --- */
-.skin-pro_studio.theme-dark {
-  --studio-bg-main:       #060910;
-  --studio-bg-surface:    #0A0F1D;
-  --studio-bg-card:       #131C33;
-  --studio-text-primary:  #F8FAFC;
-  --studio-text-secondary:#94A3B8;
-  --studio-text-muted:    #64748B;
-  --studio-border:        rgba(35, 48, 77, 0.7);
-  --studio-border-subtle: rgba(255, 255, 255, 0.07);
-  --studio-border-grid:   rgba(255, 255, 255, 0.025);
-  --studio-accent:        #10B981;
-  --studio-accent-hover:  #34D399;
-  --studio-accent-glow:   rgba(16, 185, 129, 0.25);
-  --studio-cyan:          #38BDF8;
-  --studio-amber:         #F59E0B;
-
-  background-color: var(--studio-bg-main) !important;
-  color: var(--studio-text-primary) !important;
-}
-
-/* --- Shared Font Styling --- */
-.skin-pro_studio {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-}
-
-/* --- Header --- */
-.skin-pro_studio.theme-light header {
-  background-color: #FFFFFF !important;
-  border-bottom: 1px solid var(--studio-border) !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
-}
-.skin-pro_studio.theme-dark header {
-  background-color: var(--studio-bg-surface) !important;
-  border-bottom: 1px solid var(--studio-border) !important;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.55) !important;
-}
-
-/* --- Sidebar --- */
-.skin-pro_studio.theme-light .sidebar-panel {
-  background-color: #FFFFFF !important;
-  border: none !important;
-  border-right: 1px solid var(--studio-border) !important;
-  border-radius: 0 !important;
-  margin: 0 !important;
-  height: 100% !important;
-  box-shadow: none !important;
-}
-.skin-pro_studio.theme-dark .sidebar-panel {
-  background-color: var(--studio-bg-surface) !important;
-  border: none !important;
-  border-right: 1px solid var(--studio-border) !important;
-  border-radius: 0 !important;
-  margin: 0 !important;
-  height: 100% !important;
-  box-shadow: none !important;
-}
-
-/* --- Timeline Canvas & Grid --- */
-.skin-pro_studio #timeline_parent {
-  background-color: var(--studio-bg-main) !important;
-}
-.skin-pro_studio.theme-dark #timeline_parent {
-  background-color: #060910 !important;
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px) !important;
-  background-size: 32px 32px !important;
-}
-.skin-pro_studio.theme-light #timeline_parent {
-  background-color: var(--studio-bg-main) !important;
-  background-image: 
-    linear-gradient(to right, rgba(0, 0, 0, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.02) 1px, transparent 1px) !important;
-  background-size: 32px 32px !important;
-}
-
-/* --- Timeline Event Cards --- */
-.skin-pro_studio [group="card"] {
-  background-color: var(--studio-bg-card) !important;
-  border: 1px solid var(--studio-border) !important;
-  color: var(--studio-text-primary) !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18) !important;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-.skin-pro_studio [group="card"]:hover {
-  border-color: var(--studio-accent) !important;
-  box-shadow: 0 0 16px -2px var(--studio-accent-glow), 0 6px 16px rgba(0, 0, 0, 0.35) !important;
-}
-
-/* --- Modals, Dialogs, Popovers, Details Panels --- */
-.skin-pro_studio [role="dialog"],
-.skin-pro_studio [data-radix-popper-content-wrapper],
-.skin-pro_studio .modal-surface,
-.skin-pro_studio .card-detail-panel,
-.skin-pro_studio .popover-surface {
-  background-color: var(--studio-bg-card) !important;
-  border-color: var(--studio-border) !important;
-  color: var(--studio-text-primary) !important;
-  box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.7) !important;
-}
-
-/* --- Focus visible --- */
-.skin-pro_studio button:focus-visible,
-.skin-pro_studio [role="button"]:focus-visible {
-  outline: 1.5px solid var(--studio-accent) !important;
-  outline-offset: 1px !important;
-}
-
-/* --- Inputs, Textareas, Selects --- */
-.skin-pro_studio input:not([type="checkbox"]):not([type="radio"]),
-.skin-pro_studio textarea,
-.skin-pro_studio select {
-  background-color: rgba(6, 9, 16, 0.75) !important;
-  border-color: var(--studio-border) !important;
-  color: var(--studio-text-primary) !important;
-}
-.skin-pro_studio.theme-light input:not([type="checkbox"]):not([type="radio"]),
-.skin-pro_studio.theme-light textarea,
-.skin-pro_studio.theme-light select {
-  background-color: #FFFFFF !important;
-  color: var(--studio-text-primary) !important;
-}
-.skin-pro_studio input:focus,
-.skin-pro_studio textarea:focus,
-.skin-pro_studio select:focus {
-  border-color: var(--studio-accent) !important;
-}
-.skin-pro_studio input::placeholder,
-.skin-pro_studio textarea::placeholder {
-  color: var(--studio-text-muted) !important;
-  -webkit-text-fill-color: var(--studio-text-muted) !important;
-}
-
-/* --- Primary Action Buttons (+ Novo / Sačuvaj) --- */
-.skin-pro_studio .btn-accent,
-.skin-pro_studio #btn_add_item_open {
-  background-color: var(--studio-accent) !important;
-  color: #FFFFFF !important;
-  border: 1px solid rgba(16, 185, 129, 0.8) !important;
-  box-shadow: 0 0 12px -2px rgba(16, 185, 129, 0.35) !important;
-}
-.skin-pro_studio .btn-accent:hover,
-.skin-pro_studio #btn_add_item_open:hover {
-  background-color: var(--studio-accent-hover) !important;
-  box-shadow: 0 0 18px -1px rgba(16, 185, 129, 0.55) !important;
-}
-.skin-pro_studio #btn_add_item_open,
-.skin-pro_studio #btn_add_item_open span,
-.skin-pro_studio #btn_add_item_open svg {
-  color: #FFFFFF !important;
-  stroke: #FFFFFF !important;
-}
-
-/* --- White Text & Icons Safety for Action Buttons --- */
-.skin-pro_studio button.text-white svg,
-.skin-pro_studio button.text-white .lucide,
-.skin-pro_studio [class*="bg-[#10b981]"] svg,
-.skin-pro_studio [class*="bg-[#10B981]"] svg,
-.skin-pro_studio [class*="bg-[#1E443A]"] svg,
-.skin-pro_studio [class*="bg-[#1e433a]"] svg,
-.skin-pro_studio [class*="bg-[#D96B27]"] svg,
-.skin-pro_studio [class*="bg-[#E8702A]"] svg,
-.skin-pro_studio .bg-emerald-500 svg,
-.skin-pro_studio .bg-emerald-600 svg,
-.skin-pro_studio .bg-amber-500 svg,
-.skin-pro_studio .bg-amber-600 svg {
-  color: #FFFFFF !important;
-  stroke: #FFFFFF !important;
-}
-
-/* --- Remap legacy action buttons to Radiant Emerald Studio --- */
-.skin-pro_studio button.bg-amber-500,
-.skin-pro_studio button.bg-amber-600,
-.skin-pro_studio .bg-amber-500,
-.skin-pro_studio [class*="bg-[#D96B27]"],
-.skin-pro_studio [class*="bg-[#E8702A]"] {
-  background-color: var(--studio-accent) !important;
-  color: #FFFFFF !important;
-}
-.skin-pro_studio button.bg-amber-500:hover,
-.skin-pro_studio button.bg-amber-600:hover,
-.skin-pro_studio .bg-amber-500:hover {
-  background-color: var(--studio-accent-hover) !important;
-  color: #FFFFFF !important;
-}
-
-/* --- Scrollbar za Pro Studio --- */
-.skin-pro_studio ::-webkit-scrollbar-track {
-  background: var(--studio-bg-main) !important;
-}
-.skin-pro_studio ::-webkit-scrollbar-thumb {
-  background: #1B253B !important;
-  border-radius: 9999px !important;
-}
-.skin-pro_studio ::-webkit-scrollbar-thumb:hover {
-  background: #2B3A5C !important;
-}
-.skin-pro_studio.theme-light ::-webkit-scrollbar-thumb {
-  background: #CBD5E1 !important;
-}
-.skin-pro_studio.theme-light ::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8 !important;
-}
-
-/* --- Muted tekst i ivice --- */
-.skin-pro_studio .text-muted,
-.skin-pro_studio .text-slate-400,
-.skin-pro_studio .text-slate-500 {
-  color: var(--studio-text-muted) !important;
-}
-.skin-pro_studio .border,
-.skin-pro_studio [class*="border-slate"],
-.skin-pro_studio [class*="border-gray"],
-.skin-pro_studio [class*="border-zinc"] {
-  border-color: var(--studio-border) !important;
-}
-
-/* --- Kategorije boja (Stitch Design System Tokens) --- */
-/* Svetske sile (World powers)     — Electric Cyan */
-.skin-pro_studio .cat-blue  { color: #38BDF8 !important; }
-/* Vladari (Rulers)                — Radiant Emerald */
-.skin-pro_studio .cat-green { color: #10B981 !important; }
-/* Sveto pismo (Scripture)         — Indigo / Teal */
-.skin-pro_studio .cat-teal  { color: #818CF8 !important; }
-/* Biblijski događaji              — Warm Amber */
-.skin-pro_studio .cat-amber { color: #F59E0B !important; }
-/* Svetski događaji                — Coral Rose */
-.skin-pro_studio .cat-red   { color: #FB7185 !important; }
-
-
-/* ==========================================
-   SOLID COLOR ADDITIONS & GENERAL HELPERS
-   ========================================== */
-.solid-border {
-  border-style: solid !important;
-}
-
-.transition-all {
-  transition-property: all;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 200ms;
-}
-
-/* ==========================================
-   LEAFLET MAP ENHANCEMENTS & THEMING
-   ========================================== */
+/* =========================================================
+   6. LEAFLET MAP THEMING & CUSTOM MARKERS
+   ========================================================= */
 .leaflet-container {
   width: 100%;
   height: 100%;
   font-family: inherit;
-  background-color: #0b0c10 !important;
+  background-color: #0f0f11 !important;
   z-index: 1;
 }
 
 .theme-light .leaflet-container {
-  background-color: #e5e9f0 !important;
+  background-color: #FAF8F5 !important;
 }
 
-/* Popup container styles */
 .leaflet-popup-content-wrapper {
-  background: #11141c !important;
-  color: #e2e8f0 !important;
+  background: #191919 !important;
+  color: #f4f4f5 !important;
   border-radius: 12px !important;
   padding: 0 !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
   overflow: hidden;
 }
 
 .theme-light .leaflet-popup-content-wrapper {
   background: #ffffff !important;
-  color: #1e293b !important;
-  border: 1px solid #cbd5e1 !important;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15) !important;
+  color: #18181b !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12) !important;
 }
 
 .leaflet-popup-content {
@@ -721,7 +404,7 @@ a:focus-visible {
 }
 
 .leaflet-popup-tip {
-  background: #11141c !important;
+  background: #191919 !important;
 }
 
 .theme-light .leaflet-popup-tip {
@@ -729,16 +412,15 @@ a:focus-visible {
 }
 
 .leaflet-popup-close-button {
-  color: #94a3b8 !important;
+  color: #a1a1aa !important;
   padding: 8px !important;
   font-size: 18px !important;
 }
 
 .leaflet-popup-close-button:hover {
-  color: #f59e0b !important;
+  color: #ffab2e !important;
 }
 
-/* Custom Marker Styling */
 .custom-geo-marker {
   display: flex;
   align-items: center;
@@ -773,95 +455,6 @@ a:focus-visible {
     transform: scale(1.8);
     opacity: 0;
   }
-}
-
-/* App Brand Title strict casing guarantee */
-.app-brand-title,
-.app-brand-title *,
-header h1,
-header h1 span {
-  text-transform: none !important;
-  font-variant: normal !important;
-  font-variant-caps: normal !important;
-}
-
-/* Universal hover color override for dark theme buttons */
-.theme-dark button:hover:not(:disabled),
-.theme-dark [role="button"]:hover,
-.theme-dark .hover\:bg-white\/5:hover,
-.theme-dark .hover\:bg-slate-800:hover,
-.theme-dark .hover\:bg-\[rgb\(34\,34\,39\)\]:hover,
-.theme-dark .hover\:bg-\[\#1f1f24\]:hover,
-.theme-dark .hover\:bg-\[\#222227\]:hover {
-  background-color: #2e2e2e !important;
-}
-
-/* Universal text color override from #90a1b9 to #aba7a1 */
-.text-slate-400 {
-  color: #aba7a1 !important;
-}
-
-/* =========================================================
-   3. FINAL GLOBAL FONT ENFORCEMENT
-   Guarantees that font preference updates apply across 100%
-   of all text elements on the site.
-   ========================================================= */
-html.font-pref-inter,
-html.font-pref-inter body,
-html.font-pref-inter body *:not([class*="font-sample-"]),
-body.font-pref-inter,
-body.font-pref-inter *:not([class*="font-sample-"]),
-.font-pref-inter,
-.font-pref-inter *:not([class*="font-sample-"]) {
-  font-family: var(--font-hronika) !important;
-}
-
-html.font-pref-serif,
-html.font-pref-serif body,
-html.font-pref-serif body *:not([class*="font-sample-"]),
-body.font-pref-serif,
-body.font-pref-serif *:not([class*="font-sample-"]),
-.font-pref-serif,
-.font-pref-serif *:not([class*="font-sample-"]) {
-  font-family: var(--font-serif) !important;
-}
-
-html.font-pref-mono,
-html.font-pref-mono body,
-html.font-pref-mono body *:not([class*="font-sample-"]),
-body.font-pref-mono,
-body.font-pref-mono *:not([class*="font-sample-"]),
-.font-pref-mono,
-.font-pref-mono *:not([class*="font-sample-"]) {
-  font-family: var(--font-mono) !important;
-}
-
-body .font-sample-inter,
-html .font-sample-inter,
-body * .font-sample-inter {
-  font-family: var(--font-hronika) !important;
-}
-
-body .font-sample-serif,
-html .font-sample-serif,
-body * .font-sample-serif {
-  font-family: var(--font-serif) !important;
-}
-
-body .font-sample-mono,
-html .font-sample-mono,
-body * .font-sample-mono {
-  font-family: var(--font-mono) !important;
-}
-
-/* Ensure category rows and controls in sidebar have no borders/outlines/frames in all skins/themes */
-.cat-row {
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
-}
-.cat-row button {
-  outline: none !important;
 }
 
 

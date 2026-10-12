@@ -18,6 +18,7 @@ import { MapAnalyticsView } from "./components/MapAnalyticsView";
 import { ChronologicalView } from "./components/ChronologicalView";
 import { SviciView } from "./components/SviciView";
 import { SvetoPismoView } from "./components/SvetoPismoView";
+import { getAppFlowyDataAdapter } from "./services/appflowyDataAdapter";
 import { TimelineItem, GroupConfig, TimelineFilter, AppPreferences, ViewMode, TagConfig, NotionColor, MainSection } from "./types";
 import { INITIAL_ITEMS, DEFAULT_GROUPS } from "./data";
 import { getTranslatedGroup, translateItem, sanitizeGroupToEarthPalette } from "./utils";
@@ -52,6 +53,13 @@ export default function App() {
   // Global Section State: "hronika" | "svici" | "sveto-pismo"
   const [activeSection, setActiveSection] = useState<MainSection>(() => {
     if (typeof window !== "undefined") {
+      const path = window.location.pathname.toLowerCase();
+      if (path === "/workspace" || path === "/radni-prostor") {
+        return "svici";
+      }
+      if (path === "/svici") return "svici";
+      if (path === "/sveto-pismo") return "sveto-pismo";
+
       const saved = localStorage.getItem("hronika_active_section_v1");
       if (saved === "svici" || saved === "sveto-pismo" || saved === "hronika") {
         return saved as MainSection;
@@ -61,9 +69,15 @@ export default function App() {
   });
 
   const handleSelectSection = (section: MainSection) => {
-    setActiveSection(section);
+    const targetSection = (section === "workspace" ? "svici" : section) as MainSection;
+    setActiveSection(targetSection);
     if (typeof window !== "undefined") {
-      localStorage.setItem("hronika_active_section_v1", section);
+      localStorage.setItem("hronika_active_section_v1", targetSection);
+      if (targetSection === "hronika") {
+        window.history.pushState(null, "", "/");
+      } else {
+        window.history.pushState(null, "", `/${targetSection}`);
+      }
     }
   };
 
@@ -332,6 +346,31 @@ export default function App() {
 
     return () => {
       active = false;
+    };
+  }, [timelineId]);
+
+  // Bi-directional sync with AppFlowy Data Layer
+  useEffect(() => {
+    if (!timelineId) return;
+    const adapter = getAppFlowyDataAdapter(timelineId);
+
+    // Seed existing items if adapter database is empty
+    if (items.length > 0) {
+      adapter.seedIfEmpty(items, groups);
+    }
+
+    // Subscribe to external updates from AppFlowy workspace / bridge
+    const unsubscribe = adapter.subscribe((afItems, afGroups) => {
+      if (afItems && afItems.length > 0) {
+        setItems(afItems);
+      }
+      if (afGroups && afGroups.length > 0) {
+        setGroups(afGroups);
+      }
+    });
+
+    return () => {
+      unsubscribe();
     };
   }, [timelineId]);
 
@@ -718,8 +757,8 @@ export default function App() {
       if (urlTheme === "light" || urlTheme === "dark") {
         setPreferences(prev => ({
           ...prev,
-          theme: urlTheme,
-          skin: urlSkin || prev.skin,
+          theme: urlTheme as "light" | "dark",
+          skin: (urlSkin as any) || prev.skin,
         }));
       }
     }
@@ -970,6 +1009,9 @@ export default function App() {
       }
     });
 
+    // Bi-directionally persist to AppFlowy Database Engine
+    getAppFlowyDataAdapter(timelineId).saveItem(itemToSave);
+
     // Always select the item so its detail card opens immediately on the right side
     setSelectedDetailItem(itemToSave);
 
@@ -979,6 +1021,7 @@ export default function App() {
 
   const handleDeleteItem = (id: string) => {
     setItems(prev => prev.filter(item => item.id !== id));
+    getAppFlowyDataAdapter(timelineId).deleteItem(id);
     if (selectedDetailItem?.id === id) {
       setSelectedDetailItem(null);
     }
@@ -1036,6 +1079,8 @@ export default function App() {
       });
       return cache;
     });
+
+    getAppFlowyDataAdapter(timelineId).importItems(importedInSerbian);
   };
 
   return (
@@ -1248,8 +1293,8 @@ export default function App() {
             </>
           )}
 
-          {/* 2. Svici (Scrolls) Section */}
-          {activeSection === "svici" && (
+          {/* 2. Svici (Full Workspace: Database, Documents & Scrolls) Section */}
+          {(activeSection === "svici" || activeSection === "workspace") && (
             <SviciView
               theme={preferences.theme}
               lang={lang}
@@ -1274,6 +1319,10 @@ export default function App() {
             onClose={() => setSelectedDetailItem(null)}
             onUpdateItem={handleSaveItem}
             onEditFullModal={(item) => handleTriggerEdit(item)}
+            onOpenInSvici={(item) => {
+              getAppFlowyDataAdapter(timelineId).openRowInWorkspace(item.id);
+              handleSelectSection("svici");
+            }}
             theme={preferences.theme}
             skin={preferences.skin}
             lang={lang}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { X, Rocket, Edit2, Copy, FilePlus } from "lucide-react";
 import { SKINS_CONFIG } from "./SettingsModal";
 import { SkinType } from "../types";
+import { LangType } from "../translations";
 
 interface ProjectModalProps {
   isOpen: boolean;
@@ -10,7 +11,7 @@ interface ProjectModalProps {
   initialName?: string;
   theme?: "dark" | "light";
   skin?: SkinType;
-  lang?: "sr" | "en";
+  lang?: LangType;
   onSubmit: (name: string, createOption?: "blank" | "copy") => void;
 }
 

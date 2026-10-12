@@ -19,7 +19,8 @@ import {
   ScrollText,
   BookOpen,
   Clock,
-  Sparkles
+  Sparkles,
+  FolderKanban
 } from "lucide-react";
 import { TimelineItem, ViewMode, SkinType, MainSection } from "../types";
 import { SKINS_CONFIG } from "./SettingsModal";
@@ -202,12 +203,13 @@ export function Header({
           subContext: lang === "sr" ? "Vremenska linija" : "Timeline"
         };
       case "svici":
+      case "workspace":
         return {
           title: "Svici",
-          subtitle: lang === "sr" ? "Rukopisi & BlockNote dokumenti" : "Scrolls & BlockNote documents",
+          subtitle: lang === "sr" ? "Radni prostor • Baza, dokumenti & rukopisi" : "Workspace • Database, documents & scrolls",
           icon: ScrollText,
-          color: "#ffab2e",
-          subContext: lang === "sr" ? "Rukopisi s Mrtvog mora" : "Dead Sea Scrolls"
+          color: "#3e927c",
+          subContext: lang === "sr" ? "Radni prostor i svici" : "Workspace & Scrolls"
         };
       case "sveto-pismo":
         return {
@@ -353,18 +355,18 @@ export function Header({
                   id="opt_section_svici"
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-md bg-[#ffab2e]/15 text-[#ffab2e] flex items-center justify-center shrink-0">
+                    <div className="w-6 h-6 rounded-md bg-[#3e927c]/15 text-[#3e927c] flex items-center justify-center shrink-0">
                       <ScrollText className="w-3.5 h-3.5" />
                     </div>
                     <div>
                       <div className="font-semibold text-xs leading-none">Svici</div>
                       <div className={`text-[10px] mt-1 font-normal ${isLightTheme ? "text-slate-500" : "text-[#a1a1aa]"}`}>
-                        {lang === "sr" ? "BlockNote dokumenti" : "BlockNote documents"}
+                        {lang === "sr" ? "Radni prostor • Baza & dokumenti" : "Workspace • Database & docs"}
                       </div>
                     </div>
                   </div>
-                  {activeSection === "svici" && (
-                    <Check className="w-3.5 h-3.5 text-[#ffab2e] shrink-0" />
+                  {(activeSection === "svici" || activeSection === "workspace") && (
+                    <Check className="w-3.5 h-3.5 text-[#3e927c] shrink-0" />
                   )}
                 </button>
 

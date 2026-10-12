@@ -11,7 +11,7 @@ export interface EventLocation {
 
 export type ViewMode = "timeline" | "chronological" | "map";
 
-export type MainSection = "hronika" | "svici" | "sveto-pismo";
+export type MainSection = "hronika" | "svici" | "sveto-pismo" | "workspace";
 
 export type NotionColor =
   | "default"
